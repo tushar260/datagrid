@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+release/
+*.tsbuildinfo
+
+# Caches
+.electron-cache/
+.vite/
+.vitest/
+
+# Test output
+coverage/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Packaged artifacts
+*.dmg
+*.app
+
+# Backup exports (contain connection config; never commit)
+*.datagrid-backup.json
+
+# Editors / tooling
+.idea/
+.vscode/
+.cursor/

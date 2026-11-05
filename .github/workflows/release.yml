@@ -1,0 +1,253 @@
+name: Release
+
+# Builds the macOS app (Apple Silicon + Intel) on every pushed tag `v*` and
+# publishes a GitHub Release with the DMG/ZIP files and checksums attached.
+#
+#   git tag v0.1.0 && git push origin v0.1.0     (or ./tag.sh)
+#
+# The tag must equal "v" + the "version" in package.json, otherwise the build
+# fails before doing any work. Run manually (workflow_dispatch) for a dry run:
+# it builds and uploads the files as workflow artifacts but creates NO release.
+#
+# No secrets are needed. The app is ad-hoc signed, NOT notarized (see the
+# commented block in the "Ad-hoc sign" step for adding Developer ID signing).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# One run per ref; never cancel a run that may be publishing a release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    # Both architectures are built on an Apple Silicon runner. The app has no
+    # native (compiled) dependencies (pg, ioredis, @aws-sdk/* are pure JS), so
+    # the x64 app is simply cross-packaged with the x64 Electron binary.
+    runs-on: macos-14
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            lipo_arch: arm64
+          - arch: x64
+            lipo_arch: x86_64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # The lockfile requires Node ^22.22.2 || ^24.15.0 || >=26.
+          node-version: 22
+          cache: npm
+
+      - name: Read package version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error title=Tag/version mismatch::Tag '$TAG' does not match package.json version '$VERSION' (expected tag 'v$VERSION'). Bump \"version\" in package.json, commit, and re-tag."
+            exit 1
+          fi
+          echo "Tag $TAG matches package.json version $VERSION"
+
+      - name: Install dependencies
+        run: |
+          unset NODE_ENV
+          npm ci
+
+      - name: Type check
+        run: |
+          unset NODE_ENV
+          npx tsc --noEmit
+
+      - name: Unit tests
+        # `npm test` = `vitest run`. Integration (Postgres/Redis/DynamoDB) and
+        # e2e tests are excluded by vitest.config.mts unless their RUN_* env
+        # flags are set, which they are not here.
+        run: |
+          unset NODE_ENV RUN_PG_TESTS PG_TEST_URL RUN_E2E RUN_DDB_TESTS RUN_REDIS_TESTS
+          npm test
+
+      - name: Build app (electron-vite + electron-builder)
+        env:
+          # We sign ad hoc ourselves below; never go looking for a certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          unset NODE_ENV
+          NODE_ENV=production npx electron-vite build
+          # build.mac.target is "dir": produces an unpacked DataGrid.app under dist/.
+          npx electron-builder --mac dir --${{ matrix.arch }} --publish never
+
+      - name: Ad-hoc sign and verify
+        id: app
+        run: |
+          set -euo pipefail
+          # Output is dist/mac-arm64/ for arm64 and dist/mac/ for x64.
+          APP="$(find dist -maxdepth 2 -type d -name 'DataGrid.app')"
+          if [ "$(printf '%s\n' "$APP" | grep -c .)" -ne 1 ]; then
+            echo "::error::Expected exactly one DataGrid.app under dist/, found:"; echo "$APP"; exit 1
+          fi
+          echo "App bundle: $APP"
+
+          # Make sure the bundle really is the architecture we asked for.
+          ARCHS="$(lipo -archs "$APP/Contents/MacOS/DataGrid")"
+          echo "Executable architectures: $ARCHS"
+          if [ "$ARCHS" != "${{ matrix.lipo_arch }}" ]; then
+            echo "::error::Expected ${{ matrix.lipo_arch }} executable, got: $ARCHS"; exit 1
+          fi
+
+          # Ad-hoc signature: required for arm64 binaries to run at all.
+          #
+          # To use a Developer ID certificate + notarization instead (later):
+          #   1. Add repo secrets CSC_LINK (base64 .p12), CSC_KEY_PASSWORD,
+          #      APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
+          #   2. In package.json set "mac.identity" to the certificate name (or
+          #      remove "identity": null), add "mac.hardenedRuntime": true and
+          #      "mac.notarize": true (or an afterSign notarize hook).
+          #   3. Expose the secrets as env on the "Build app" step and drop the
+          #      ad-hoc codesign below (electron-builder signs + notarizes).
+          codesign --force --deep -s - "$APP"
+          codesign -v --deep --strict "$APP"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+
+      - name: Package DMG, ZIP and checksums
+        env:
+          VERSION: ${{ steps.pkg.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          APP: ${{ steps.app.outputs.app }}
+        run: |
+          set -euo pipefail
+          OUT="$PWD/release"
+          mkdir -p "$OUT"
+          DMG="DataGrid-$VERSION-$ARCH.dmg"
+          ZIP="DataGrid-$VERSION-$ARCH-mac.zip"
+
+          # DMG: the .app plus an /Applications symlink, compressed (UDZO).
+          STAGE="$(mktemp -d)"
+          ditto "$APP" "$STAGE/DataGrid.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "DataGrid" -srcfolder "$STAGE" -ov -format UDZO "$OUT/$DMG"
+          rm -rf "$STAGE"
+          hdiutil verify "$OUT/$DMG"
+
+          # ZIP: ditto keeps symlinks and the code signature (plain zip can corrupt bundles).
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/$ZIP"
+
+          # Sanity check: the zip must unpack to a validly signed app.
+          CHECK="$(mktemp -d)"
+          ditto -x -k "$OUT/$ZIP" "$CHECK"
+          codesign -v --deep --strict "$CHECK/DataGrid.app"
+          rm -rf "$CHECK"
+
+          (cd "$OUT" && shasum -a 256 "$DMG" "$ZIP" > "SHA256SUMS-$ARCH.txt")
+          ls -lh "$OUT"
+          cat "$OUT/SHA256SUMS-$ARCH.txt"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataGrid-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    # Only real tag pushes publish; manual (workflow_dispatch) runs never do.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          pattern: DataGrid-*
+          merge-multiple: true
+
+      - name: Merge checksums
+        working-directory: release
+        run: |
+          set -euo pipefail
+          cat SHA256SUMS-*.txt | sort -k2 > SHA256SUMS.txt
+          rm SHA256SUMS-*.txt
+          cat SHA256SUMS.txt
+          ls -lh
+
+      - name: Create or update release
+        run: |
+          set -euo pipefail
+
+          # Tags with a hyphen (v1.0.0-beta.1) are pre-releases.
+          PRERELEASE=()
+          if [[ "$TAG" == *-* ]]; then PRERELEASE=(--prerelease); fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Re-run: release already exists, just (re)upload the files.
+            echo "Release $TAG exists; uploading assets with --clobber"
+            gh release upload "$TAG" release/* --clobber
+            exit 0
+          fi
+
+          # GitHub-generated notes (commits/PRs since the previous tag) + install footer.
+          gh api "repos/$GH_REPO/releases/generate-notes" -f tag_name="$TAG" --jq .body > notes.md
+          cat >> notes.md <<'EOF'
+
+          ## Downloads
+
+          | Mac | File |
+          | --- | --- |
+          | Apple Silicon (M1/M2/M3/M4) | `DataGrid-<version>-arm64.dmg` (or `-arm64-mac.zip`) |
+          | Intel | `DataGrid-<version>-x64.dmg` (or `-x64-mac.zip`) |
+
+          Verify downloads with `SHA256SUMS.txt`.
+
+          ## First launch (not notarized)
+
+          The app is ad-hoc signed and **not notarized**, so macOS Gatekeeper blocks it on first launch. Either right-click the app and choose **Open**, or run:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/DataGrid.app
+          ```
+          EOF
+
+          gh release create "$TAG" release/* \
+            --title "$TAG" \
+            --notes-file notes.md \
+            --verify-tag \
+            "${PRERELEASE[@]}"

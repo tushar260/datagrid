@@ -4,6 +4,22 @@ A fast, lightweight desktop client for PostgreSQL, DynamoDB and Redis, with an I
 
 <!-- Screenshot placeholder: add an image here once one is committed to the repo. -->
 
+## Install
+
+DataGrid is macOS only. Run this in a terminal to install the latest release into `/Applications`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tushar260/datagrid/main/install.sh | bash
+```
+
+Or download the DMG or ZIP from the [releases page](https://github.com/tushar260/datagrid/releases). The app is ad-hoc signed and not notarized, so a browser download is blocked by macOS Gatekeeper on first launch. Clear the quarantine flag once and it opens normally:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/DataGrid.app
+```
+
+(On macOS 15 and later you can instead open System Settings, Privacy & Security, and click Open Anyway.)
+
 ## Features
 
 ### Common

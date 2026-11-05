@@ -56,9 +56,6 @@
     "appId": "com.local.datagrid",
     "productName": "DataGrid",
     "copyright": "Copyright © 2026 Tushar Arora",
-    "extraMetadata": {
-      "name": "datagrip-lite"
-    },
     "directories": {
       "output": "dist"
     },

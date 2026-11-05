@@ -1,6 +1,6 @@
 import type React from "react"
 import { useEffect, useRef, useState } from 'react'
-import { redisDisplayName, type DataSource } from '../../shared'
+import { TAB_DRAG_MIME, redisDisplayName, type DataSource } from '../../shared'
 import Explorer, { TableRef } from './Explorer'
 import TableView from './TableView'
 import DynamoTableView from './DynamoTableView'
@@ -238,7 +238,7 @@ export default function App(): React.JSX.Element {
   const anim = useTabAnimations({ keys: tabs.map(keyOf), ready: restored, dragKey, stripRef: tabbarRef, onRemove: removeTab })
   const reorder = (ts: Tab[], from: string, to: string | null, after: boolean): Tab[] => reorderTabs(ts, keyOf, from, to, after)
   const moveTabBy = (k: string, delta: number): void => setTabs((ts) => moveTab(ts, keyOf, k, delta))
-  const TAB_MIME = 'application/x-datagrip-lite-tab' // unique type so explorer drags are ignored (legacy name, kept on purpose)
+  const TAB_MIME = TAB_DRAG_MIME // unique type so explorer drags are ignored
   const isTabDrag = (e: React.DragEvent): boolean => Array.from(e.dataTransfer.types).includes(TAB_MIME)
   const dropTarget = (e: React.DragEvent): { key: string | null; after: boolean } => {
     const el = (e.target as HTMLElement).closest?.('[data-tabkey]') as HTMLElement | null

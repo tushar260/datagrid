@@ -80,17 +80,17 @@ describe('BackupSection: export', () => {
   })
 
   it('sends only the whitelisted layout keys, and the session only when "Include open tabs and layout" is ticked', async () => {
-    localStorage.setItem('datagrip-lite:console-split', '0.4')
-    localStorage.setItem('datagrip-lite:picker-size:table', '{"w":300,"h":200}')
-    localStorage.setItem('datagrip-lite:session', JSON.stringify({ v: 1, tabs: [], consoleSql: { c1: 'select 1' } }))
-    localStorage.setItem('datagrip-lite:cache', 'x')
+    localStorage.setItem('datagrid:console-split', '0.4')
+    localStorage.setItem('datagrid:picker-size:table', '{"w":300,"h":200}')
+    localStorage.setItem('datagrid:session', JSON.stringify({ v: 1, tabs: [], consoleSql: { c1: 'select 1' } }))
+    localStorage.setItem('datagrid:cache', 'x')
     localStorage.setItem('unrelated', 'y')
     const api = installApi({ backup: { export: { ok: false, canceled: true } } })
     render(<BackupSection />)
     await click('Export backup…')
     await click('Choose location…')
     const first = api.backup.export.mock.calls[0][0]
-    expect(first.layout).toEqual({ 'datagrip-lite:console-split': '0.4', 'datagrip-lite:picker-size:table': '{"w":300,"h":200}' })
+    expect(first.layout).toEqual({ 'datagrid:console-split': '0.4', 'datagrid:picker-size:table': '{"w":300,"h":200}' })
     expect(first.session).toBeUndefined()
     fireEvent.click(screen.getByLabelText('Include open tabs and layout'))
     await click('Choose location…')
@@ -296,7 +296,7 @@ describe('BackupSection: import and restore', () => {
 
   it('Replace: shows a clear warning, forces settings and layout from the backup, starts settings from the defaults', async () => {
     const api = installApi({
-      backup: { pick: pickedPlain({ hasSettings: true, hasLayout: true }), apply: applied({ mode: 'replace', settings: { density: 'compact' }, layout: { 'datagrip-lite:console-split': '0.3', 'datagrip-lite:session': '{}' } }) }
+      backup: { pick: pickedPlain({ hasSettings: true, hasLayout: true }), apply: applied({ mode: 'replace', settings: { density: 'compact' }, layout: { 'datagrid:console-split': '0.3', 'datagrid:session': '{}' } }) }
     })
     updateSettings({ nullText: '∅', pageSize: 500 })
     render(<BackupSection />)
@@ -313,8 +313,8 @@ describe('BackupSection: import and restore', () => {
     expect(api.backup.apply).toHaveBeenCalledWith('imp-1', expect.objectContaining({ mode: 'replace', applySettings: true, applyLayout: true }))
     expect(getSettings()).toEqual({ ...DEFAULT_SETTINGS, density: 'compact' })
     // only whitelisted layout keys reach localStorage
-    expect(localStorage.getItem('datagrip-lite:console-split')).toBe('0.3')
-    expect(localStorage.getItem('datagrip-lite:session')).toBeNull()
+    expect(localStorage.getItem('datagrid:console-split')).toBe('0.3')
+    expect(localStorage.getItem('datagrid:session')).toBeNull()
   })
 
   it('layout and tabs need a reload to show: the status offers it (and restoring the session replaces the saved one)', async () => {
@@ -322,7 +322,7 @@ describe('BackupSection: import and restore', () => {
     installApi({
       backup: {
         pick: pickedPlain({ hasSession: true, hasLayout: true }),
-        apply: applied({ layout: { 'datagrip-lite:filter-split': '0.45' }, session: { v: 1, tabs: [], width: 333 } })
+        apply: applied({ layout: { 'datagrid:filter-split': '0.45' }, session: { v: 1, tabs: [], width: 333 } })
       }
     })
     render(<BackupSection onReload={onReload} />)
@@ -330,8 +330,8 @@ describe('BackupSection: import and restore', () => {
     fireEvent.click(screen.getByLabelText('Also apply layout (panel sizes)'))
     fireEvent.click(screen.getByLabelText('Also restore open tabs'))
     await click('Restore')
-    expect(localStorage.getItem('datagrip-lite:filter-split')).toBe('0.45')
-    expect(JSON.parse(localStorage.getItem('datagrip-lite:session')!)).toMatchObject({ v: 1, width: 333 })
+    expect(localStorage.getItem('datagrid:filter-split')).toBe('0.45')
+    expect(JSON.parse(localStorage.getItem('datagrid:session')!)).toMatchObject({ v: 1, width: 333 })
     expect(screen.getByRole('status').textContent).toContain('layout, open tabs')
     await click('Reload to show layout and tabs')
     expect(onReload).toHaveBeenCalledTimes(1)

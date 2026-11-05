@@ -347,13 +347,13 @@ describe.skipIf(!canRun)('E2E smoke (installed app, throw-away user data dir)', 
   })
 
   it('the installed app bundles the AWS SDK (no "Cannot find module" in the app log)', () => {
-    const log = join(userData, 'datagrip-lite.log')
+    const log = join(userData, 'datagrid.log')
     if (existsSync(log)) expect(readFileSync(log, 'utf8')).not.toMatch(/Cannot find module/)
   })
 
   it('the app logged no errors the whole time (console, uncaught exceptions, app log)', async () => {
     expect(realErrors()).toEqual([])
-    const log = join(userData, 'datagrip-lite.log')
+    const log = join(userData, 'datagrid.log')
     if (existsSync(log)) expect(readFileSync(log, 'utf8')).not.toMatch(/uncaughtException|unhandledRejection/)
   })
 

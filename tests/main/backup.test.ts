@@ -73,9 +73,9 @@ describe('buildBackup / validateBackup', () => {
     }
   })
 
-  it('migrates legacy sources without a kind to PostgreSQL', () => {
-    const legacy = { id: 'old', name: 'Old', host: 'h', port: 5432, user: 'u', password: 'enc:xx', database: 'd', ssl: false }
-    const b = buildBackup({ sources: [legacy], folders: [], includeSecrets: false, appVersion: '1', platform: 'darwin' })
+  it('sources without a kind default to PostgreSQL', () => {
+    const noKind = { id: 'old', name: 'Old', host: 'h', port: 5432, user: 'u', password: 'enc:xx', database: 'd', ssl: false }
+    const b = buildBackup({ sources: [noKind], folders: [], includeSecrets: false, appVersion: '1', platform: 'darwin' })
     expect(b.sources[0].kind).toBe('postgres')
     expect(b.sources[0].password).toBe('')
   })
@@ -164,7 +164,7 @@ describe('buildBackup / validateBackup', () => {
       "folders":[],"sources":[{"id":"s","name":"S","host":"h","port":1,"__proto__":{"polluted":true},"constructor":{"x":1},
         "schemaFilter":{"__proto__":["a"],"db":["t"]},"tableFilter":{"constructor":{"list":["a"]},"d/s":{"list":["t"],"__proto__":{"p":1}}}}],
       "settings":{"__proto__":{"polluted":true},"uiSize":14,"constructor":"x"},
-      "layout":{"__proto__":"1","datagrip-lite:console-split":"0.5"},
+      "layout":{"__proto__":"1","datagrid:console-split":"0.5"},
       "session":{"__proto__":{"polluted":true},"tabs":[{"__proto__":{"p":1},"type":"table"}]}}`
     const parsed = parseBackupFile(text)
     if (parsed.encrypted) throw new Error('unexpected')
@@ -173,7 +173,7 @@ describe('buildBackup / validateBackup', () => {
     expect(Object.keys(b.sources[0].schemaFilter!)).toEqual(['db'])
     expect(Object.keys(b.sources[0].tableFilter!)).toEqual(['d/s'])
     expect(b.settings).toEqual({ uiSize: 14 })
-    expect(b.layout).toEqual({ 'datagrip-lite:console-split': '0.5' })
+    expect(b.layout).toEqual({ 'datagrid:console-split': '0.5' })
     expect(JSON.stringify(b.session)).not.toContain('polluted')
     expect(Object.getPrototypeOf(b.sources[0].schemaFilter)).toBe(Object.prototype)
   })
@@ -260,31 +260,37 @@ describe('settings, layout and session sections', () => {
   it('layout whitelist: split ratios and picker sizes only, never the session or other keys', () => {
     expect(
       sanitizeLayout({
-        'datagrip-lite:console-split': '0.4',
-        'datagrip-lite:filter-split': '0.6',
-        'datagrip-lite:redis-split': '0.5',
-        'datagrip-lite:picker-size:table': '{"w":300,"h":200}',
-        'datagrip-lite:session': '{"v":1,"tabs":[]}',
-        'datagrip-lite:settings': '{}',
-        'datagrip-lite:picker-size:../x': '1',
-        'datagrip-lite:picker-size:': '1',
+        'datagrid:console-split': '0.4',
+        'datagrid:filter-split': '0.6',
+        'datagrid:redis-split': '0.5',
+        'datagrid:picker-size:table': '{"w":300,"h":200}',
+        'datagrid:session': '{"v":1,"tabs":[]}',
+        'datagrid:settings': '{}',
+        'datagrid:picker-size:../x': '1',
+        'datagrid:picker-size:': '1',
         'other:key': '1',
-        'datagrip-lite:console-split2': '1'
+        'datagrid:console-split2': '1'
       })
     ).toEqual({
-      'datagrip-lite:console-split': '0.4',
-      'datagrip-lite:filter-split': '0.6',
-      'datagrip-lite:redis-split': '0.5',
-      'datagrip-lite:picker-size:table': '{"w":300,"h":200}'
+      'datagrid:console-split': '0.4',
+      'datagrid:filter-split': '0.6',
+      'datagrid:redis-split': '0.5',
+      'datagrid:picker-size:table': '{"w":300,"h":200}'
     })
-    expect(isBackupLayoutKey('datagrip-lite:session')).toBe(false)
-    expect(isBackupLayoutKey('datagrip-lite:picker-size:db')).toBe(true)
+    expect(isBackupLayoutKey('datagrid:session')).toBe(false)
+    expect(isBackupLayoutKey('datagrid:picker-size:db')).toBe(true)
     expect(isBackupLayoutKey(5)).toBe(false)
   })
 
+  it('layout keys with an unknown prefix are ignored, known ones are kept', () => {
+    expect(
+      sanitizeLayout({ 'unknown:console-split': '0.4', 'unknown:picker-size:db': '{"w":1,"h":2}', 'unknown:session': '{}', 'datagrid:redis-split': '0.5' })
+    ).toEqual({ 'datagrid:redis-split': '0.5' })
+  })
+
   it('layout values must be small JSON numbers / number-only objects', () => {
-    expect(sanitizeLayout({ 'datagrip-lite:console-split': 'not json', 'datagrip-lite:filter-split': '"str"', 'datagrip-lite:redis-split': 'x'.repeat(300) })).toEqual({})
-    expect(sanitizeLayout({ 'datagrip-lite:picker-size:a': '{"w":"1"}', 'datagrip-lite:picker-size:b': '{"a":1,"b":2,"c":3,"d":4,"e":5}' })).toEqual({})
+    expect(sanitizeLayout({ 'datagrid:console-split': 'not json', 'datagrid:filter-split': '"str"', 'datagrid:redis-split': 'x'.repeat(300) })).toEqual({})
+    expect(sanitizeLayout({ 'datagrid:picker-size:a': '{"w":"1"}', 'datagrid:picker-size:b': '{"a":1,"b":2,"c":3,"d":4,"e":5}' })).toEqual({})
     expect(sanitizeLayout(5)).toBeUndefined()
   })
 
@@ -301,9 +307,9 @@ describe('settings, layout and session sections', () => {
   it('a backup includes settings and layout only when given', () => {
     expect(build().settings).toBeUndefined()
     expect(build().layout).toBeUndefined()
-    const b = build({ settings: { uiSize: 15, motion: 'off' }, layout: { 'datagrip-lite:console-split': '0.3', 'datagrip-lite:session': '{}' } })
+    const b = build({ settings: { uiSize: 15, motion: 'off' }, layout: { 'datagrid:console-split': '0.3', 'datagrid:session': '{}' } })
     expect(b.settings).toEqual({ uiSize: 15, motion: 'off' })
-    expect(b.layout).toEqual({ 'datagrip-lite:console-split': '0.3' })
+    expect(b.layout).toEqual({ 'datagrid:console-split': '0.3' })
   })
 })
 
@@ -547,7 +553,7 @@ describe('planImport', () => {
 
 describe('helpers', () => {
   it('summarize counts folders and sources by kind and reports what is included', () => {
-    const b = build({ includeSecrets: true, settings: { uiSize: 14 }, layout: { 'datagrip-lite:console-split': '0.5' }, session: { v: 1 } })
+    const b = build({ includeSecrets: true, settings: { uiSize: 14 }, layout: { 'datagrid:console-split': '0.5' }, session: { v: 1 } })
     const s = summarize(b, 'x.json', true)
     expect(s).toMatchObject({
       fileName: 'x.json', appVersion: '1.2.3', platform: 'darwin', hasSettings: true, hasLayout: true, hasSession: true, hasSecrets: true, encrypted: true,

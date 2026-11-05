@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Mod = typeof import('../../src/renderer/src/session')
-const KEY = 'datagrip-lite:session'
+const KEY = 'datagrid:session'
 
 async function load(stored?: unknown): Promise<Mod> {
   localStorage.clear()

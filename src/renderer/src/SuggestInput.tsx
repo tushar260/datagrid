@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import type { Column } from '../../shared'
 import { candidates, ORDER_KEYWORDS, WHERE_KEYWORDS, wordAt, type Ctx, type Item } from './lib/suggest'
 
-/** DataGrip-like completion input for the WHERE / ORDER BY boxes: suggests column names (+ a few keywords). */
+/** IDE-style completion input for the WHERE / ORDER BY boxes: suggests column names (+ a few keywords). */
 
 const MAX_ITEMS = 10 // visible rows before the list scrolls (all matches are kept in the list)
 

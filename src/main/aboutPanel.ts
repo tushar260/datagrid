@@ -8,7 +8,7 @@ export interface AboutPanelOptions {
   credits: string
 }
 
-/** The options of the native About panel (macOS "About DataGrid"). The name is explicit: app.name is pinned to the legacy identity. */
+/** The options of the native About panel (macOS "About DataGrid"). The name is explicit: app.name is the lowercase runtime name (identity.ts), not a display name. */
 export function buildAboutPanelOptions(version: string, year: number = new Date().getFullYear()): AboutPanelOptions {
   return { applicationName: APP_DISPLAY_NAME, applicationVersion: version, copyright: appCopyright(year), credits: APP_CREDIT }
 }

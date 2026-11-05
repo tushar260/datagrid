@@ -62,7 +62,7 @@ describe('binary names', () => {
 
 describe('key delimiter', () => {
   const ok = { host: 'localhost', port: 6379, db: 0 }
-  it('defaults to none (a flat key list, like DataGrip) when absent; a typed separator is used as is', () => {
+  it('defaults to none (a flat key list) when absent; a typed separator is used as is', () => {
     expect(REDIS_DEFAULT_DELIMITER).toBe('')
     expect(redisDelimiter({})).toBe('')
     expect(redisDelimiter(undefined)).toBe('')

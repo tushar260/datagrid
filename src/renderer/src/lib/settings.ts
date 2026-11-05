@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { STORAGE_PREFIX } from '../../../shared'
 
 /**
  * App-level settings (appearance, data grid, general). Stored in localStorage under a versioned key, applied to the
@@ -6,8 +7,7 @@ import { useSyncExternalStore } from 'react'
  * Corrupt or out-of-range stored values fall back to the defaults field by field.
  */
 
-// 'datagrip-lite:' is a legacy persisted prefix (pre-DataGrid name): do not rename or users' saved settings / session reset.
-const KEY = 'datagrip-lite:settings'
+const KEY = `${STORAGE_PREFIX}settings`
 const VERSION = 1
 
 export type UiFont = 'google' | 'macos' | 'linux'

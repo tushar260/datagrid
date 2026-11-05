@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Mod = typeof import('../../src/renderer/src/lib/settings')
-const KEY = 'datagrip-lite:settings'
+const KEY = 'datagrid:settings'
 
 /** settings.ts reads localStorage at import time, so each test imports a fresh copy. */
 async function load(stored?: unknown): Promise<Mod> {

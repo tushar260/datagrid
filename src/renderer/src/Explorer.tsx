@@ -269,7 +269,7 @@ function Node({
   useEffect(() => () => track?.(id, false), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // "Expand All" only opens nodes that are already loaded (like DataGrip), it never fires new queries
+    // "Expand All" only opens nodes that are already loaded (IDE-style), it never fires new queries
     if (expandKey !== init.current.expandKey && !leaf && kidList && expandAll !== false) setOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandKey])
@@ -1463,7 +1463,7 @@ export default function Explorer({
   }
 
   /**
-   * Redis data source, DataGrip style: source -> databases -> type folders (strings, lists, ...) -> key folders grouped by
+   * Redis data source, IDE style: source -> databases -> type folders (strings, lists, ...) -> key folders grouped by
    * the source's key delimiter -> keys. Expanding a database scans all of its keys once (main process, capped); the
    * folder tree is built from that answer in memory (lib/redisTree) and only expanded folders are rendered.
    */

@@ -3,8 +3,7 @@ import type { TableRef } from '../Explorer'
 
 /**
  * Identity helpers for open tabs / tree nodes. PostgreSQL tables live at ds/database/schema/table; DynamoDB tables have no
- * database or schema (ds/table, region in the key) so the two kinds can never collide. PostgreSQL keys are unchanged, which
- * keeps sessions saved by older versions loading.
+ * database or schema (ds/table, region in the key) so the two kinds can never collide.
  */
 export const isDynamoRef = (x: { engine?: string }): boolean => x.engine === 'dynamodb'
 /** A Redis "table" is the key browser of one logical database (ds/db index), see `redisRef`. */

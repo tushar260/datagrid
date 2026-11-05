@@ -385,7 +385,7 @@ describe('cacheIdentity: what a data source connects to', () => {
       expect(cacheIdentity(pg(o)), JSON.stringify(o)).toBe(base)
   })
   it.each([{ host: 'h2' }, { port: 5433 }, { user: 'v' }, { database: 'other' }])('PostgreSQL: %j changes it', (o) => expect(cacheIdentity(pg(o))).not.toBe(cacheIdentity(pg())))
-  it('a legacy source without kind is PostgreSQL', () => expect(cacheIdentity(pg({ kind: undefined }))).toBe(cacheIdentity(pg({ kind: 'postgres' }))))
+  it('a source without kind is PostgreSQL', () => expect(cacheIdentity(pg({ kind: undefined }))).toBe(cacheIdentity(pg({ kind: 'postgres' }))))
   it.each([{ region: 'eu-west-1' }, { endpoint: 'http://localhost:8000' }, { profile: 'dev' }, { authMode: 'keys' as const }, { accessKeyId: 'AKIA1' }])(
     'DynamoDB: %j changes it',
     (o) => expect(cacheIdentity(ddb(o))).not.toBe(cacheIdentity(ddb()))

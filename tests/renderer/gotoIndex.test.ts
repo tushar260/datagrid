@@ -221,7 +221,7 @@ describe('recent list (empty query)', () => {
     recordRecent(R('a'))
     expect(loadRecent().map((r) => r.name)).toEqual(['a', 'b'])
     expect(JSON.parse(localStorage.getItem(RECENT_KEY)!)).toHaveLength(2)
-    expect(RECENT_KEY).toBe('datagrip-lite:goto-recent')
+    expect(RECENT_KEY).toBe('datagrid:goto-recent')
   })
   it('the same name in another schema / database / source is another entry', () => {
     recordRecent(R('a'))

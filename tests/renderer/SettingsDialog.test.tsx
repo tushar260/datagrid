@@ -55,7 +55,7 @@ describe('SettingsDialog', () => {
     expect(root().style.getPropertyValue('--ui-font')).toContain('Ubuntu')
     fireEvent.change(sel('Editor & grid font'), { target: { value: 'linux' } })
     expect(root().style.getPropertyValue('--mono')).toContain('DejaVu')
-    expect(JSON.parse(localStorage.getItem('datagrip-lite:settings')!).settings).toMatchObject({ uiFont: 'linux', monoFont: 'linux' })
+    expect(JSON.parse(localStorage.getItem('datagrid:settings')!).settings).toMatchObject({ uiFont: 'linux', monoFont: 'linux' })
   })
 
   it('changes sizes, density, page size, NULL text, animations and tab restore', () => {
@@ -213,7 +213,7 @@ describe('SettingsDialog: cached database objects', () => {
     fireEvent.click(box)
     expect(getSettings().cacheObjects).toBe(false)
     expect(box.checked).toBe(false)
-    expect(JSON.parse(localStorage.getItem('datagrip-lite:settings')!).settings.cacheObjects).toBe(false)
+    expect(JSON.parse(localStorage.getItem('datagrid:settings')!).settings.cacheObjects).toBe(false)
     fireEvent.click(box)
     expect(getSettings().cacheObjects).toBe(true)
   })
@@ -441,9 +441,9 @@ describe('SettingsDialog: sections', () => {
 
   it('does not touch the persisted settings key when switching sections', () => {
     render(<SettingsDialog onClose={() => {}} />)
-    const before = localStorage.getItem('datagrip-lite:settings')
+    const before = localStorage.getItem('datagrid:settings')
     for (const section of Object.keys(CONTENT)) open(section)
-    expect(localStorage.getItem('datagrip-lite:settings')).toBe(before)
+    expect(localStorage.getItem('datagrid:settings')).toBe(before)
     expect(Object.keys(localStorage).filter((k) => k.includes('section'))).toEqual([])
   })
 

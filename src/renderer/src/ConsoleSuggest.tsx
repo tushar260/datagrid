@@ -9,7 +9,7 @@ import { analyzeRedis, buildRedisItems, type RedisCtx } from './lib/redisCommand
 import { analyzePartiql, buildPartiqlItems, type PartiqlCtx, type PartiqlMeta } from './lib/partiqlCandidates'
 
 /**
- * DataGrip-like completion for the query console's <textarea>: schema metadata (loaded lazily, cached per console)
+ * IDE-style completion for the query console's <textarea>: schema metadata (loaded lazily, cached per console)
  * plus a popup anchored at the caret. The textarea stays the editor, so selection / run-selection keep working.
  */
 

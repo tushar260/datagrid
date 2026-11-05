@@ -539,7 +539,7 @@ describe.skipIf(!on)('Redis explorer: key tree and key tabs (own throwaway redis
     })
   })
 
-  it('the DataGrip folders: counts per type and per prefix are exact', async () => {
+  it('the type / prefix folders: counts per type and per prefix are exact', async () => {
     const r = await keyTree(ds, DB)
     const g = buildKeyTree(r.keys as never, ':')
     expect(g.map((x) => [x.label, x.count])).toEqual([

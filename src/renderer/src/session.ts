@@ -1,21 +1,21 @@
 import type { TableRef } from './Explorer'
 import type { ConsoleRef } from './Console'
 import { tableKey } from './lib/refs'
+import { STORAGE_PREFIX } from '../../shared'
 
 /**
  * Restores the previous UI session on restart: open tabs (+ order, active tab), sidebar width/visibility,
  * explorer expansion, console SQL drafts and per-table view state. Stored in localStorage under a versioned key.
- * Never stores query results. Corrupt / old data is ignored.
+ * Never stores query results. Corrupt data is ignored.
  */
 
-// 'datagrip-lite:' is a legacy persisted prefix (pre-DataGrid name): do not rename or users' saved settings / session reset.
-const KEY = 'datagrip-lite:session'
+const KEY = `${STORAGE_PREFIX}session`
 const VERSION = 1
 
 export interface TableViewState {
   page: number
   pageSize: number
-  /** 0-based first-row offset (authoritative when present; `page` is the legacy page index) */
+  /** 0-based first-row offset (authoritative when present; `page` is the page index) */
   offset?: number
   sort: { column: string; desc: boolean } | null
   /** (Redis key browser: the key pattern) */

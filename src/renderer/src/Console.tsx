@@ -1,13 +1,13 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { splitStatements, type DynamoStatementResult, type QueryResult, type RedisCommandResult } from '../../shared'
+import { STORAGE_PREFIX, splitStatements, type DynamoStatementResult, type QueryResult, type RedisCommandResult } from '../../shared'
 import RedisResults from './RedisReplyView'
 import { setConsoleSql } from './session'
 import { useConsoleSuggest } from './ConsoleSuggest'
 import { appendPage } from './lib/dynamoPaging'
 import { DragHandle, clamp, isRatio, readStored, writeStored } from './Resizable'
 
-const SPLIT_KEY = 'datagrip-lite:console-split'
+const SPLIT_KEY = `${STORAGE_PREFIX}console-split`
 const SPLIT_DEFAULT = 0.38
 
 export interface ConsoleRef {

@@ -167,6 +167,7 @@ export function sanitizeLayout(raw: unknown): Record<string, string> | undefined
   if (!isObj(raw)) return undefined
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(raw)) {
+    // unknown keys (including layout keys of other versions) are ignored
     if (!isBackupLayoutKey(k) || typeof v !== 'string' || v.length > 256) continue
     try {
       const j: unknown = JSON.parse(v)

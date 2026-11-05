@@ -1,6 +1,6 @@
 # DataGrid
 
-A fast, lightweight desktop client for PostgreSQL, DynamoDB and Redis, with a DataGrip-style UI.
+A fast, lightweight desktop client for PostgreSQL, DynamoDB and Redis, with an IDE-style database explorer and query console.
 
 <!-- Screenshot placeholder: add an image here once one is committed to the repo. -->
 
@@ -124,9 +124,13 @@ An ad-hoc signed, non-notarized app is blocked by Gatekeeper on first launch. Ri
 xattr -dr com.apple.quarantine /Applications/DataGrid.app
 ```
 
+### Releases
+
+Pushing a tag that starts with `v` runs `.github/workflows/release.yml`. It type-checks, runs the unit tests, builds Apple Silicon (`arm64`) and Intel (`x64`) apps, ad-hoc signs them, and publishes a GitHub Release with `DataGrid-<version>-<arch>.dmg`, `DataGrid-<version>-<arch>-mac.zip` and `SHA256SUMS.txt` attached. Nothing needs to be uploaded by hand. To cut a release, bump `version` in `package.json` and commit, then run `./tag.sh` (or `git tag v0.1.0 && git push origin v0.1.0`). The workflow fails if the tag is not `v` plus the `package.json` version. Tags with a hyphen, such as `v1.0.0-beta.1`, are marked as pre-releases. The builds are not notarized (see above). Running the workflow manually from the Actions tab builds the files as run artifacts without creating a release.
+
 ## Data and privacy
 
-DataGrid has no server component and sends nothing anywhere except to the databases you configure. Data is stored locally in the Electron `userData` folder, `~/Library/Application Support/datagrip-lite/`:
+DataGrid has no server component and sends nothing anywhere except to the databases you configure. Data is stored locally in the Electron `userData` folder, `~/Library/Application Support/datagrid/`:
 
 | Path | Content |
 | --- | --- |
@@ -134,20 +138,20 @@ DataGrid has no server component and sends nothing anywhere except to the databa
 | `window-state.json`, `zoom.json` | Window geometry and zoom |
 | `cache/<source id>.json` | Local explorer cache (size-capped) |
 | `backups/auto-*.datagrid-backup.json` | Automatic safety backups, the latest 5 are kept |
-| `datagrip-lite.log` | Error log |
+| `datagrid.log` | Error log |
 
 - Passwords, AWS secret keys/session tokens and Redis passwords are encrypted with Electron `safeStorage` (macOS Keychain) and stored as `enc:` values. If encryption is unavailable they are stored as `raw:` values. The renderer never receives saved secrets back.
-- Settings and the session (open tabs, expanded folders, console drafts) are kept in the renderer's `localStorage`, under keys prefixed `datagrip-lite:`.
+- Saved passwords are encrypted with Electron `safeStorage`, which keeps its key in the macOS Keychain item "datagrid Safe Storage".
+- Settings and the session (open tabs, expanded folders, console drafts) are kept in the renderer's `localStorage`, under keys prefixed `datagrid:`.
 - Exported backups are plain JSON unless you choose to include secrets, in which case they are encrypted with your passphrase.
-
-The identifier `datagrip-lite` (app name, userData folder, Keychain item "datagrip-lite Safe Storage", `localStorage` prefix, log file name) is a legacy name kept on purpose. The product was renamed to DataGrid, but changing these would move the data folder and orphan the Keychain key, making saved passwords unreadable. See `src/main/legacyIdentity.ts`.
 
 ## Project structure
 
 ```
 src/
   main/        Electron main process: IPC, PostgreSQL (db.ts), DynamoDB (dynamo.ts), Redis (redis.ts),
-               data source store, object cache, backup/restore, window state, zoom
+               data source store, object cache, backup/restore, window state, zoom,
+               identity.ts / pinIdentity.ts (app name, data folder, Keychain item name)
   preload/     contextBridge API exposed to the renderer
   renderer/    React UI (index.html, src/*.tsx, src/lib/* helpers, styles.css)
   shared.ts    Types and pure helpers shared by main and renderer
@@ -166,8 +170,6 @@ Electron 45, React 19, TypeScript, electron-vite (Vite), Vitest with Testing Lib
 ## Credits
 
 Designed and developed by Tushar Arora.
-
-Disclaimer: DataGrid is not affiliated with or endorsed by JetBrains. DataGrip is a trademark of JetBrains s.r.o.
 
 ## License
 

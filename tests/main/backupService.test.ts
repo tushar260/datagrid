@@ -118,7 +118,7 @@ const asOk = (r: BackupApplyOutcome): BackupApplyResult => {
 describe('export', () => {
   it('shows the save dialog (default name in Documents, overwrite confirmation, json filter) and writes a plain file without secrets', async () => {
     const f = setup()
-    const r = await f.svc.export({ includeSecrets: false, settings: { uiSize: 14 }, layout: { 'datagrip-lite:console-split': '0.4', 'datagrip-lite:session': 'x' } })
+    const r = await f.svc.export({ includeSecrets: false, settings: { uiSize: 14 }, layout: { 'datagrid:console-split': '0.4', 'datagrid:session': 'x' } })
     expect(f.save).toHaveBeenCalledTimes(1)
     const opts = (f.save.mock.calls[0] as unknown[])[0] as Record<string, unknown>
     expect(opts.defaultPath).toBe('/docs/' + suggestFileName(new Date(f.clock.t)))
@@ -134,7 +134,7 @@ describe('export', () => {
     expect(p.encrypted).toBe(false)
     if (!p.encrypted) {
       expect(p.backup.settings).toEqual({ uiSize: 14 })
-      expect(p.backup.layout).toEqual({ 'datagrip-lite:console-split': '0.4' })
+      expect(p.backup.layout).toEqual({ 'datagrid:console-split': '0.4' })
       expect(p.backup.session).toBeUndefined()
       expect(p.backup.sources.map((s) => s.name)).toEqual(['Main', 'Cache'])
     }
@@ -380,11 +380,11 @@ describe('apply', () => {
 
   it('merge: writes a safety backup first, commits the plan, leaves live connections alone, returns what to apply', async () => {
     const f = setup()
-    const id = await pick(f, plainBackup({ settings: { uiSize: 15 }, layout: { 'datagrip-lite:console-split': '0.3' }, session: { v: 1, tabs: [] } }))
-    const r = asOk(await f.svc.apply(id, { ...opts, applySettings: true, applyLayout: true, applySession: false, current: { settings: { uiSize: 13 }, layout: { 'datagrip-lite:filter-split': '0.5' } } }))
+    const id = await pick(f, plainBackup({ settings: { uiSize: 15 }, layout: { 'datagrid:console-split': '0.3' }, session: { v: 1, tabs: [] } }))
+    const r = asOk(await f.svc.apply(id, { ...opts, applySettings: true, applyLayout: true, applySession: false, current: { settings: { uiSize: 13 }, layout: { 'datagrid:filter-split': '0.5' } } }))
     expect(r).toMatchObject({ mode: 'merge', foldersAdded: 1, sourcesAdded: 1, skipped: 0, renamed: 0, secrets: 'none', undoAvailable: true })
     expect(r.settings).toEqual({ uiSize: 15 })
-    expect(r.layout).toEqual({ 'datagrip-lite:console-split': '0.3' })
+    expect(r.layout).toEqual({ 'datagrid:console-split': '0.3' })
     expect(r.session).toBeUndefined() // not asked for
     expect(f.state.sources.map((s) => s.id)).toEqual(['p1', 'r1', 'n1'])
     expect(f.state.folders.map((x) => x.id)).toEqual(['f1', 'nf'])
@@ -400,7 +400,7 @@ describe('apply', () => {
     if (p.encrypted) throw new Error('unexpected')
     expect(p.backup.sources.map((s) => s.id)).toEqual(['p1', 'r1'])
     expect(p.backup.settings).toEqual({ uiSize: 13 })
-    expect(p.backup.layout).toEqual({ 'datagrip-lite:filter-split': '0.5' })
+    expect(p.backup.layout).toEqual({ 'datagrid:filter-split': '0.5' })
     expect(p.backup.deviceSecrets).toEqual({ p1: { password: 'enc:QUJD' }, r1: { password: 'enc:REVG' } })
     // the safety backup was written before the commit
     expect(f.commit.mock.invocationCallOrder[0]).toBeGreaterThan(0)
@@ -408,7 +408,7 @@ describe('apply', () => {
 
   it('settings, layout and tabs are returned only when asked for (and present)', async () => {
     const f = setup()
-    const id = await pick(f, plainBackup({ settings: { uiSize: 15 }, layout: { 'datagrip-lite:console-split': '0.3' }, session: { v: 1, tabs: [] } }))
+    const id = await pick(f, plainBackup({ settings: { uiSize: 15 }, layout: { 'datagrid:console-split': '0.3' }, session: { v: 1, tabs: [] } }))
     const r = asOk(await f.svc.apply(id, { ...opts, applySession: true }))
     expect(r.settings).toBeUndefined()
     expect(r.layout).toBeUndefined()
@@ -584,7 +584,7 @@ describe('undo', () => {
     f.files.set(IN, plainBackup({ settings: { uiSize: 15 } }))
     const r = await f.svc.pick()
     if (!r.ok || r.needsPassphrase) throw new Error('unexpected')
-    asOk(await f.svc.apply(r.importId, { mode: 'replace', applySettings: true, applyLayout: false, applySession: false, current: { settings: { uiSize: 13 }, layout: { 'datagrip-lite:console-split': '0.7' } } }))
+    asOk(await f.svc.apply(r.importId, { mode: 'replace', applySettings: true, applyLayout: false, applySession: false, current: { settings: { uiSize: 13 }, layout: { 'datagrid:console-split': '0.7' } } }))
     expect(f.state.sources.map((s) => s.id)).toEqual(['n1'])
     f.closeSource.mockClear()
 
@@ -598,7 +598,7 @@ describe('undo', () => {
     const items = f.commit.mock.calls.at(-1)![0] as StateItem[]
     expect(items.every((i) => 'add' in i && i.deviceSecrets !== undefined)).toBe(true)
     expect(u.settings).toEqual({ uiSize: 13 })
-    expect(u.layout).toEqual({ 'datagrip-lite:console-split': '0.7' })
+    expect(u.layout).toEqual({ 'datagrid:console-split': '0.7' })
     expect(u.undoAvailable).toBe(true)
     expect(f.closeSource.mock.calls.map((c) => c[0])).toEqual(['n1'])
   })

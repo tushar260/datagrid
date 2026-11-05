@@ -470,7 +470,7 @@ describe('App: tab context menu', () => {
 })
 
 describe('App: drag-reorder of tabs', () => {
-  const MIME = 'application/x-datagrip-lite-tab'
+  const MIME = 'application/x-datagrid-tab'
   const dt = (data: Record<string, string> = {}): DataTransfer => {
     const store = { ...data }
     return { get types() { return Object.keys(store) }, setData: (k: string, v: string) => void (store[k] = v), getData: (k: string) => store[k] ?? '', effectAllowed: '', dropEffect: '' } as unknown as DataTransfer

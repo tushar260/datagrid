@@ -122,7 +122,7 @@ describe('database node', () => {
     expect(api.redis.keyTree).not.toHaveBeenCalled()
   })
 
-  it('expanding it scans all keys once, with the 100,000 cap, and shows the type folders in DataGrip order', async () => {
+  it('expanding it scans all keys once, with the 100,000 cap, and shows the type folders in the IDE-style order', async () => {
     await openTo()
     expect(api.redis.keyTree).toHaveBeenCalledTimes(1)
     expect(api.redis.keyTree).toHaveBeenCalledWith('d1', 0, { max: 100000 })
@@ -344,7 +344,7 @@ describe('key folders and leaves', () => {
 describe('key delimiter setting', () => {
   const folderIds = (): string[] => ids().filter((i) => i.startsWith(S + '/'))
 
-  it('sources without the setting (the default) show a flat list of keys under the type, like DataGrip', async () => {
+  it('sources without the setting (the default) show a flat list of keys under the type', async () => {
     const src = redis('d1')
     delete src.redis!.keyDelimiter
     setup({}, src)

@@ -395,12 +395,12 @@ export interface DynamoTableInfo {
 
 export const REDIS_DEFAULT_PORT = 6379
 export const REDIS_MAX_DB = 255
-export const REDIS_DEFAULT_DELIMITER = '' // like DataGrip: a flat key list per type until a key separator is set
+export const REDIS_DEFAULT_DELIMITER = '' // IDE-style: a flat key list per type until a key separator is set
 export const REDIS_MAX_DELIMITER = 8
 /** most keys the explorer's key tree loads for one database */
 export const REDIS_KEYTREE_MAX = 100_000
 
-/** The delimiter in effect for a config: undefined (legacy sources) = `:`, blank = no grouping. */
+/** The delimiter in effect for a config: undefined (not set) = `:`, blank = no grouping. */
 export const redisDelimiter = (c: { keyDelimiter?: string } | undefined | null): string =>
   c?.keyDelimiter === undefined ? REDIS_DEFAULT_DELIMITER : c.keyDelimiter
 
@@ -666,11 +666,16 @@ export const BACKUP_MAX_PASSPHRASE = 1024
 /** Keys that are never accepted as object keys / ids anywhere in a backup. */
 export const isHostileKey = (k: string): boolean => k === '__proto__' || k === 'constructor' || k === 'prototype'
 
-const LAYOUT_EXACT = ['datagrip-lite:console-split', 'datagrip-lite:filter-split', 'datagrip-lite:redis-split']
-const LAYOUT_PICKER = 'datagrip-lite:picker-size:'
+/** Prefix of every renderer localStorage key. */
+export const STORAGE_PREFIX = 'datagrid:'
+/** Drag-and-drop MIME type of editor tabs. */
+export const TAB_DRAG_MIME = 'application/x-datagrid-tab'
+
+const LAYOUT_EXACT = [`${STORAGE_PREFIX}console-split`, `${STORAGE_PREFIX}filter-split`, `${STORAGE_PREFIX}redis-split`]
+const LAYOUT_PICKER = `${STORAGE_PREFIX}picker-size:`
 /**
  * UI layout preferences that travel in a backup (split ratios, picker sizes). Never the open-tabs session, console SQL
- * text, or any cache. ('datagrip-lite:' is the legacy persisted prefix.)
+ * text, or any cache.
  */
 export const isBackupLayoutKey = (k: unknown): k is string =>
   typeof k === 'string' && (LAYOUT_EXACT.includes(k) || (k.startsWith(LAYOUT_PICKER) && /^[A-Za-z0-9_-]{1,40}$/.test(k.slice(LAYOUT_PICKER.length))))
@@ -700,7 +705,7 @@ export interface BackupExportRequest {
   includeSecrets: boolean
   /** only when includeSecrets (min 8 characters); never stored or logged */
   passphrase?: string
-  /** the renderer's `datagrip-lite:settings` values */
+  /** the renderer's `datagrid:settings` values */
   settings?: unknown
   /** whitelisted localStorage layout entries (key -> raw string) */
   layout?: Record<string, string>

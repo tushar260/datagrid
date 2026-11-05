@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { redisDisplayName, type RedisKeyDetail as Detail, type RedisKeyInfo } from '../../shared'
+import { STORAGE_PREFIX, redisDisplayName, type RedisKeyDetail as Detail, type RedisKeyInfo } from '../../shared'
 import type { TableRef } from './Explorer'
 import RedisKeyDetail from './RedisKeyDetail'
 import RedisNewKeyDialog from './RedisNewKeyDialog'
@@ -22,7 +22,7 @@ const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform)
 const MOD_HINT = IS_MAC ? '⌘' : 'Ctrl'
 const PAGE_SIZES = [100, 200, 500, 1000, 5000]
 const DEFAULT_PAGE = 200
-const SPLIT_KEY = 'datagrip-lite:redis-split'
+const SPLIT_KEY = `${STORAGE_PREFIX}redis-split`
 const SPLIT_DEFAULT = 0.55 // share of the width taken by the key list
 
 const clean = (e: unknown): string => String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')

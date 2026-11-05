@@ -327,7 +327,7 @@ export async function tableNames(ds: DataSource, database: string): Promise<Reco
   return out
 }
 
-/** Schemas that exist in a database, excluding Postgres-internal toast/temp ones (matches DataGrip's "n of total"). */
+/** Schemas that exist in a database, excluding Postgres-internal toast/temp ones (the "n of total" count of the explorer). */
 export async function schemaTotal(ds: DataSource, database: string): Promise<number> {
   const r = await poolFor(ds, database).query(
     `select count(*)::int as n from pg_namespace

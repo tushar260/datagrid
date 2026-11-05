@@ -173,7 +173,7 @@ describe('editing a saved Redis source', () => {
 })
 
 describe('key delimiter field', () => {
-  it('is a "Key delimiter" field, empty by default (a flat key list, like DataGrip), with a hint', async () => {
+  it('is a "Key delimiter" field, empty by default (a flat key list), with a hint', async () => {
     await newRedis()
     expect(field('Key delimiter').value).toBe('')
     expect(field('Key delimiter').placeholder).toMatch(/flat list/)
@@ -218,7 +218,7 @@ describe('key delimiter field', () => {
     expect((api.saveSource.mock.calls[0][0] as DataSource).redis).toMatchObject({ keyDelimiter: '' })
   })
 
-  it('a saved source shows its delimiter; a legacy one without it is empty (flat)', () => {
+  it('a saved source shows its delimiter; one without it is empty (flat)', () => {
     const { unmount } = render(<DataSourceDialog initial={saved({ keyDelimiter: '|' })} onClose={vi.fn()} />)
     expect(field('Key delimiter').value).toBe('|')
     unmount()

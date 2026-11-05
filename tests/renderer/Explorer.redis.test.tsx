@@ -290,7 +290,7 @@ describe('Redis menus', () => {
     expect(clip).toHaveBeenCalledWith('db3')
   })
 
-  it('double-click on a database only expands / collapses it (like DataGrip), it opens no tab', async () => {
+  it('double-click on a database only expands / collapses it (IDE-style), it opens no tab', async () => {
     setup({ redis: { keyTree: vi.fn(async () => ({ keys: [{ key: 'a', type: 'string' }], complete: true, dbsize: 1 })) } })
     await mount()
     await openSource()

@@ -1,5 +1,6 @@
 import type React from "react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { STORAGE_PREFIX } from '../../shared'
 import type { Column, RowsResult } from '../../shared'
 import type { TableRef } from './Explorer'
 import { getTableView, setTableView, tableKey } from './session'
@@ -99,12 +100,12 @@ export default function TableView({
   const [orderInput, setOrderInput] = useState(v0?.orderExpr ?? '')
   const [orderExpr, setOrderExpr] = useState(v0?.orderExpr ?? '')
   // draggable divider between the WHERE and ORDER BY boxes (share of WHERE, persisted; default 60/40)
-  const fsplit = useRatioSplit('datagrip-lite:filter-split', 0.6)
+  const fsplit = useRatioSplit(`${STORAGE_PREFIX}filter-split`, 0.6)
   // restored tabs load lazily: nothing is fetched until the tab is first shown
   const [started, setStarted] = useState(active)
   useEffect(() => { if (active) setStarted(true) }, [active])
   useEffect(() => {
-    // `page` is kept for compatibility with older saved sessions; `offset` is authoritative
+    // `offset` is authoritative; `page` is derived from it
     setTableView(tableKey(t), { page: Math.floor(offset / pageSize), pageSize, offset, sort, where, orderExpr })
   }, [t, offset, pageSize, sort, where, orderExpr])
   const [err, setErr] = useState('')
@@ -369,7 +370,7 @@ export default function TableView({
     const flash = p.inserted.length // one-shot highlight (CSS `row-flash`) for the freshly inserted row only
     setFlashRow(flash)
     setTimeout(() => setFlashRow((f) => (f === flash ? null : f)), 700)
-    // DataGrip behaviour: focus the new row's first cell and open it for editing (Tab then moves on)
+    // IDE behaviour: focus the new row's first cell and open it for editing (Tab then moves on)
     const first = S.current.cols[0]
     setCur({ kind: 'new', i: p.inserted.length, c: 0 })
     revealNewRef.current = true

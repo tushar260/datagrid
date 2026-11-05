@@ -226,7 +226,7 @@ describe('Console: editor behaviour', () => {
       render(<Console c={{ ...ref, sql: '' }} />)
       fireEvent.change(editor(), { target: { value: 'select now()' } })
       vi.advanceTimersByTime(400)
-      expect(JSON.parse(localStorage.getItem('datagrip-lite:session')!).consoleSql.c1).toBe('select now()')
+      expect(JSON.parse(localStorage.getItem('datagrid:session')!).consoleSql.c1).toBe('select now()')
       expect(initialSession).toBeTruthy()
       const n0 = api.tableNames.mock.calls.length
       fireEvent.click(screen.getByTitle(/Refresh table and column suggestions/))
@@ -237,16 +237,16 @@ describe('Console: editor behaviour', () => {
   })
 
   it('editor height follows the stored split; the splitter resets on double-click', () => {
-    localStorage.setItem('datagrip-lite:console-split', '0.6')
+    localStorage.setItem('datagrid:console-split', '0.6')
     render(<Console c={ref} />)
     expect(editor().style.height).toBe('60%')
     fireEvent.doubleClick(document.querySelector('.split-h')!)
     expect(editor().style.height).toBe('38%')
-    expect(localStorage.getItem('datagrip-lite:console-split')).toBeNull()
+    expect(localStorage.getItem('datagrid:console-split')).toBeNull()
   })
 
   it('an out-of-range stored split falls back to the default', () => {
-    localStorage.setItem('datagrip-lite:console-split', '7')
+    localStorage.setItem('datagrid:console-split', '7')
     render(<Console c={ref} />)
     expect(editor().style.height).toBe('38%')
   })

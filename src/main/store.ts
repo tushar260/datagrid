@@ -68,7 +68,7 @@ function openRedis(d: DataSource): DataSource {
 function open(d: DataSource): DataSource {
   if (dsKind(d) === 'dynamodb') return openDynamo(d)
   if (dsKind(d) === 'redis') return openRedis(d)
-  // sources saved before DynamoDB support have no `kind`: they are PostgreSQL (migrated on load, the file is not rewritten)
+  // a source without a `kind` is PostgreSQL (defaulted on load, the file is not rewritten)
   if (!d.password) return { ...d, kind: 'postgres', passwordUnavailable: false }
   const p = dec(d.password)
   return p === null

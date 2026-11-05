@@ -19,36 +19,36 @@ beforeEach(() => {
 describe('collectLayout / applyLayout', () => {
   it('collects only whitelisted layout keys (no session, no console text, no cache, no settings)', () => {
     for (const [k, v] of Object.entries({
-      'datagrip-lite:console-split': '0.4',
-      'datagrip-lite:filter-split': '0.6',
-      'datagrip-lite:redis-split': '0.5',
-      'datagrip-lite:picker-size:db': '{"w":1,"h":2}',
-      'datagrip-lite:session': '{"v":1}',
-      'datagrip-lite:settings': '{"v":1}',
-      'datagrip-lite:cache:x': '1',
+      'datagrid:console-split': '0.4',
+      'datagrid:filter-split': '0.6',
+      'datagrid:redis-split': '0.5',
+      'datagrid:picker-size:db': '{"w":1,"h":2}',
+      'datagrid:session': '{"v":1}',
+      'datagrid:settings': '{"v":1}',
+      'datagrid:cache:x': '1',
       'other': '1'
     })) localStorage.setItem(k, v)
     expect(collectLayout()).toEqual({
-      'datagrip-lite:console-split': '0.4',
-      'datagrip-lite:filter-split': '0.6',
-      'datagrip-lite:redis-split': '0.5',
-      'datagrip-lite:picker-size:db': '{"w":1,"h":2}'
+      'datagrid:console-split': '0.4',
+      'datagrid:filter-split': '0.6',
+      'datagrid:redis-split': '0.5',
+      'datagrid:picker-size:db': '{"w":1,"h":2}'
     })
   })
 
   it('applyLayout writes the whitelisted keys and ignores everything else', () => {
-    applyLayout({ 'datagrip-lite:console-split': '0.2', 'datagrip-lite:session': 'x', 'evil': 'y', 'datagrip-lite:picker-size:../x': '1' })
-    expect(localStorage.getItem('datagrip-lite:console-split')).toBe('0.2')
-    expect(localStorage.getItem('datagrip-lite:session')).toBeNull()
+    applyLayout({ 'datagrid:console-split': '0.2', 'datagrid:session': 'x', 'evil': 'y', 'datagrid:picker-size:../x': '1' })
+    expect(localStorage.getItem('datagrid:console-split')).toBe('0.2')
+    expect(localStorage.getItem('datagrid:session')).toBeNull()
     expect(localStorage.getItem('evil')).toBeNull()
-    expect(collectLayout()).toEqual({ 'datagrip-lite:console-split': '0.2' })
-    expect(localStorage.getItem('datagrip-lite:picker-size:../x')).toBeNull()
+    expect(collectLayout()).toEqual({ 'datagrid:console-split': '0.2' })
+    expect(localStorage.getItem('datagrid:picker-size:../x')).toBeNull()
   })
 
   it('collectCurrent has the settings and layout, and the session only when asked', () => {
-    localStorage.setItem('datagrip-lite:console-split', '0.3')
-    localStorage.setItem('datagrip-lite:session', JSON.stringify({ v: 1, tabs: [] }))
-    expect(collectCurrent(false)).toEqual({ settings: getSettings(), layout: { 'datagrip-lite:console-split': '0.3' } })
+    localStorage.setItem('datagrid:console-split', '0.3')
+    localStorage.setItem('datagrid:session', JSON.stringify({ v: 1, tabs: [] }))
+    expect(collectCurrent(false)).toEqual({ settings: getSettings(), layout: { 'datagrid:console-split': '0.3' } })
     expect(collectCurrent(true).session).toMatchObject({ v: 1 })
   })
 })
@@ -59,7 +59,7 @@ describe('applyRestore', () => {
     const r = applyRestore(result({ settings: { uiSize: 3, monoSize: 99, uiFont: 'wingdings', motion: 'off', restoreTabs: 'no', pageSize: 7, unknown: 1 } }))
     expect(r.reload).toBe(false)
     expect(getSettings()).toEqual({ ...DEFAULT_SETTINGS, nullText: '∅', density: 'comfortable', uiSize: 11, monoSize: 20, motion: 'off' })
-    expect(JSON.parse(localStorage.getItem('datagrip-lite:settings')!).settings).toEqual(getSettings())
+    expect(JSON.parse(localStorage.getItem('datagrid:settings')!).settings).toEqual(getSettings())
     expect(document.documentElement.classList.contains('no-motion')).toBe(true)
   })
 
@@ -73,7 +73,7 @@ describe('applyRestore', () => {
     updateSettings({ density: 'compact' })
     expect(applyRestore(result())).toEqual({ reload: false })
     expect(getSettings().density).toBe('compact')
-    expect(applyRestore(result({ layout: { 'datagrip-lite:filter-split': '0.7' } }))).toEqual({ reload: true })
+    expect(applyRestore(result({ layout: { 'datagrid:filter-split': '0.7' } }))).toEqual({ reload: true })
     expect(applyRestore(result({ session: { v: 1, tabs: [] } }))).toEqual({ reload: true })
   })
 })
@@ -84,7 +84,7 @@ describe('session export / replace', () => {
     replaceSession({ v: 1, tabs: [], width: 9999, sidebarHidden: true, junk: 1 })
     const saved = exportSession() as Record<string, unknown>
     expect(saved).toMatchObject({ v: 1, sidebarHidden: true })
-    localStorage.setItem('datagrip-lite:session', '{broken')
+    localStorage.setItem('datagrid:session', '{broken')
     expect(exportSession()).toBeUndefined()
   })
 })

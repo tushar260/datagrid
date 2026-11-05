@@ -36,7 +36,7 @@ const KEY_GLYPHS: Record<string, { color: string; glyph: string }> = {
   'key-other': { color: '#9aa0aa', glyph: '?' }
 }
 
-/** Small hand-drawn SVG icons (DataGrip-like colours, not copied assets). */
+/** Small hand-drawn SVG icons (IDE-style colours, not copied assets). */
 export function Icon({ name, size = S }: { name: IconName; size?: number }): React.JSX.Element {
   const common = { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true as const }
   switch (name) {

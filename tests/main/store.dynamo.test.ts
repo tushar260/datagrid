@@ -237,7 +237,7 @@ describe('reading', () => {
   })
 })
 
-describe('migration of sources saved before DynamoDB support', () => {
+describe('sources saved without a kind', () => {
   it('a source without kind loads as postgres and the file is not rewritten', () => {
     upsertSource(pg('old'))
     const list = rawList()
@@ -252,7 +252,7 @@ describe('migration of sources saved before DynamoDB support', () => {
     expect(fileText()).toBe(before)
   })
 
-  it('an old source with an empty password migrates too', () => {
+  it('a source without a kind and with an empty password loads as postgres too', () => {
     writeFileSync(dsFile(), JSON.stringify([{ id: 'x', name: 'x', host: 'h', port: 5432, user: 'u', password: '', database: 'd', ssl: false }]))
     expect(loadSource('x')).toMatchObject({ kind: 'postgres', password: '', passwordUnavailable: false })
   })

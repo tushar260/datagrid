@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from './icons'
-import { matchRule, type PatternRule, type RuleMode } from '../../shared'
+import { STORAGE_PREFIX, matchRule, type PatternRule, type RuleMode } from '../../shared'
 import { DragHandle, clampSize, isSize, placeInViewport, readStored, writeStored, type Size } from './Resizable'
 
 const PICKER_MIN: Size = { w: 280, h: 220 }
@@ -90,7 +90,7 @@ export default function ListPicker({
     commit(next)
   }
   // resizable popup: one remembered size per kind (databases / schemas / tables, known from the icon)
-  const sizeKey = `datagrip-lite:picker-size:${icon}`
+  const sizeKey = `${STORAGE_PREFIX}picker-size:${icon}`
   const [size, setSize] = useState<Size>(() =>
     clampSize(readStored(sizeKey, PICKER_DEFAULT, isSize), PICKER_MIN, window.innerWidth, window.innerHeight)
   )

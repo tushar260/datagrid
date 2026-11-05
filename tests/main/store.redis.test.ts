@@ -167,8 +167,8 @@ describe('the write-only password protocol', () => {
   })
 })
 
-describe('compatibility and other kinds', () => {
-  it('a legacy Postgres / DynamoDB-free file still loads unchanged', () => {
+describe('other kinds', () => {
+  it('a Postgres-only file (no kind) loads unchanged', () => {
     writeFileSync(dsFile(), JSON.stringify([{ id: 'p', name: 'p', host: 'h', port: 5432, user: 'u', password: 'raw:pw', database: 'd', ssl: false }]))
     const [p] = loadSources()
     expect(p).toMatchObject({ id: 'p', host: 'h', password: 'pw' })
@@ -202,7 +202,7 @@ describe('key delimiter setting', () => {
     expect(rawList().map((d) => d.redis!.keyDelimiter)).toEqual(['/', '', '::'])
   })
 
-  it('a source saved without it stays without it (legacy: the app then uses ":")', () => {
+  it('a source saved without it stays without it (the app then uses ":")', () => {
     upsertSource(rds('a'))
     expect(loadSources()[0].redis).not.toHaveProperty('keyDelimiter')
     expect(rawList()[0].redis).not.toHaveProperty('keyDelimiter')

@@ -12,7 +12,7 @@ const folder = (l: KeyEntry[], name: string): KeyFolder => {
 const all = (groups: ReturnType<typeof buildKeyTree>): string[] => groups.flatMap((g) => keysUnder(g.children)).sort()
 
 describe('type groups', () => {
-  it('only types that have keys, in DataGrip order, with their counts', () => {
+  it('only types that have keys, in the IDE-style order, with their counts', () => {
     const g = buildKeyTree(
       [
         ...ks(['h1', 'h2'], 'hash'), ...ks(['s1', 's2', 's3']), ...ks(['z'], 'zset'), ...ks(['l'], 'list'),

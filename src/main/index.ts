@@ -1,4 +1,4 @@
-import './pinLegacyIdentity' // MUST stay the first import: pins app name / userData to the pre-"DataGrid" identity (see legacyIdentity.ts)
+import './pinIdentityEffect' // MUST stay the first import: pins the app name and sets userData to <appData>/datagrid (see identity.ts)
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
 import { join } from 'path'
 import { appendFileSync } from 'fs'
@@ -10,6 +10,7 @@ import { listProfiles } from './awsProfiles'
 import { loadSourcesForRenderer, publicSource, mergeStoredSecrets, loadSource, upsertSource, deleteSource, KEYCHAIN_HELP, loadFolders, createFolder, renameFolder, moveFolder, deleteFolder, updateSourceFolders, patchSource, mutateSource, duplicateSource, explainKeychain, hasStoredPasswords, sourceIds, loadSourceRaw, loadSourcesRaw, commitState, encryptionAvailable, secretBlobs, loadSources } from './store'
 import { createBackupService } from './backupService'
 import { setupAboutPanel } from './aboutPanel'
+import { LOG_FILE_NAME } from './identity'
 import { createObjectCache, cacheIdentity, invalidationsFor, validCacheDsId, validCacheKey, validCachePrefix } from './objectCache'
 import { initialWindowState, trackWindowState } from './windowState'
 import { ZOOM_DEFAULT, clampPercent, factorToPercent, nextZoom, percentToFactor, readZoom, stepZoom, writeZoom } from './zoom'
@@ -34,8 +35,7 @@ function setZoomPercent(percent: number): void {
 
 function log(msg: string): void {
   try {
-    // 'datagrip-lite.log' keeps its legacy name (existing users' log file)
-    appendFileSync(join(app.getPath('userData'), 'datagrip-lite.log'), `${new Date().toISOString()} ${msg}\n`)
+    appendFileSync(join(app.getPath('userData'), LOG_FILE_NAME), `${new Date().toISOString()} ${msg}\n`)
   } catch {
     /* ignore */
   }
@@ -356,7 +356,7 @@ function buildMenu(): void {
     ...(process.platform === 'darwin'
       ? [
           {
-            label: 'DataGrid', // fixed: app.name is pinned to the legacy "datagrip-lite" (see legacyIdentity.ts) so saved data / Keychain entries stay put
+            label: 'DataGrid', // fixed display name (app.name is the lowercase runtime name, see identity.ts)
             submenu: [
               { role: 'about' },
               { type: 'separator' },

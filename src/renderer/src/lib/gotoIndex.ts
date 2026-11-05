@@ -1,4 +1,4 @@
-import { applyTableFilter, cacheKeys, dsKind, type CacheEntry, type DataSource, type RedisDatabases } from '../../../shared'
+import { STORAGE_PREFIX, applyTableFilter, cacheKeys, dsKind, type CacheEntry, type DataSource, type RedisDatabases } from '../../../shared'
 import type { TableRef } from '../Explorer'
 import { cached } from './objectCache'
 
@@ -124,7 +124,7 @@ export const databaseNodeId = (e: GotoEntry): string => (e.engine === 'redis' ? 
 // recently opened (empty query)
 // ---------------------------------------------------------------------------------------------------------------
 
-export const RECENT_KEY = 'datagrip-lite:goto-recent'
+export const RECENT_KEY = `${STORAGE_PREFIX}goto-recent`
 export const RECENT_MAX = 20
 
 type Recent = Pick<GotoEntry, 'dsId' | 'engine' | 'kind' | 'name' | 'database' | 'schema' | 'db' | 'region'>

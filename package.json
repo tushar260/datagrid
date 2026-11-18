@@ -1,6 +1,6 @@
 {
   "name": "datagrid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DataGrid: a lightweight desktop client for PostgreSQL, DynamoDB and Redis",
   "main": "./out/main/index.js",
   "scripts": {

@@ -9,6 +9,7 @@ import { useRatioSplit } from './Resizable'
 import { MAX_LIMIT, parseRange } from './lib/range'
 import { useLinger } from './useLinger'
 import { computeDelete, effectiveSelection, linOf, NO_ROWS, rangeSet, toggleLin } from './lib/rowSelection'
+import { copyPayload, inColRange } from './lib/cellRange'
 import { cleanDbError, suggestHint } from './lib/whereFix'
 import { explorerOwnsRefresh } from './lib/focusZone'
 import { getSettings, useSettings } from './lib/settings'
@@ -118,6 +119,10 @@ export default function TableView({
   const [selRows, setSelRows] = useState<ReadonlySet<number>>(NO_ROWS)
   // Escape: no row counts as selected (the cell cursor `cur` stays); reset by the next focused-cell change
   const [selCleared, setSelCleared] = useState(false)
+  // selected column range (inclusive); null = just the focused cell's column. Rows × columns = the copied rectangle.
+  const [colSel, setColSel] = useState<{ a: number; b: number } | null>(null)
+  const anchorColRef = useRef(0)
+  const dragRef = useRef(false) // left button held after mouse-down on a cell: moving over cells extends the rectangle
   const anchorRef = useRef<number | null>(null) // range anchor for Shift+click / Shift+Arrow
   const keepSelRef = useRef(false) // set right before a setCur that must NOT reset the row selection
   const [editing, setEditing] = useState<{ kind: Kind; i: number; col: string } | null>(null)
@@ -287,13 +292,22 @@ export default function TableView({
   })
 
   // latest state for the keyboard handlers
-  const S = useRef({ pending, editing, res, cur, selRows, selCleared, cols, isView, tab, active, pkCols, loading, submitting })
-  S.current = { pending, editing, res, cur, selRows, selCleared, cols, isView, tab, active, pkCols, loading, submitting }
+  const S = useRef({ pending, editing, res, cur, selRows, selCleared, cols, isView, tab, active, pkCols, loading, submitting, colSel })
+  S.current = { pending, editing, res, cur, selRows, selCleared, cols, isView, tab, active, pkCols, loading, submitting, colSel }
+
+  // stop drag-selecting when the mouse is released anywhere
+  useEffect(() => {
+    const up = (): void => { dragRef.current = false }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
 
   // any focused-cell change resets the row selection to that cell's row, unless the change came from row-selection code
   useEffect(() => {
     setSelCleared(false) // a click / arrow key / add / select-all re-establishes a selection after Escape
     if (keepSelRef.current) { keepSelRef.current = false; return }
+    setColSel(null)
+    anchorColRef.current = cur?.c ?? 0
     setSelRows((p) => (p.size ? NO_ROWS : p))
     anchorRef.current = cur ? linOf(cur, S.current.res?.rows.length ?? 0) : null
   }, [cur])
@@ -411,19 +425,51 @@ export default function TableView({
   }
 
   /** Mouse selection on a row-number gutter cell or a data cell: plain = select row, Shift = range, Cmd/Ctrl = toggle. */
-  const pickRow = (kind: Kind, i: number, c: number, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): void => {
+  const fullCols = (): { a: number; b: number } => ({ a: 0, b: Math.max(0, S.current.cols.length - 1) })
+  /** Select the rectangle between the anchor cell and (kind,i,c); gutter = whole rows. */
+  const extendRect = (kind: Kind, i: number, c: number, gutter = false): void => {
+    const rs = S.current.res
+    if (!rs) return
+    const nRows = rs.rows.length
+    const lin = linOf({ kind, i }, nRows)
+    const anchor = anchorRef.current ?? (S.current.cur ? linOf(S.current.cur, nRows) : lin)
+    anchorRef.current = anchor
+    keepSelRef.current = true
+    setSelRows(rangeSet(anchor, lin))
+    setColSel(gutter ? fullCols() : { a: anchorColRef.current, b: c })
+    setCur({ kind, i, c })
+  }
+  /** Select a whole column (Cmd/Ctrl+click on its header; Shift extends the column range). */
+  const pickColumn = (ci: number, extend: boolean): void => {
+    const rs = S.current.res
+    if (!rs) return
+    const total = rs.rows.length + S.current.pending.inserted.length
+    if (!total) return
+    if (!extend) anchorColRef.current = ci
+    anchorRef.current = 0
+    keepSelRef.current = true
+    setSelRows(rangeSet(0, total - 1))
+    setColSel({ a: anchorColRef.current, b: ci })
+    setCur({ ...(S.current.cur ?? curAt(0, ci)), c: ci })
+  }
+  const pickRow = (
+    kind: Kind, i: number, c: number, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }, gutter = false
+  ): void => {
     const rs = S.current.res
     if (!rs) return
     const nRows = rs.rows.length
     const lin = linOf({ kind, i }, nRows)
     const cur0 = S.current.cur
     if (e.shiftKey) {
-      const anchor = anchorRef.current ?? (cur0 ? linOf(cur0, nRows) : lin)
-      anchorRef.current = anchor
+      extendRect(kind, i, c, gutter)
+    } else if (gutter && !(e.metaKey || e.ctrlKey)) {
+      anchorRef.current = lin
       keepSelRef.current = true
-      setSelRows(rangeSet(anchor, lin))
+      setSelRows(rangeSet(lin, lin))
+      setColSel(fullCols())
       setCur({ kind, i, c })
     } else if (e.metaKey || e.ctrlKey) {
+      setColSel(gutter ? fullCols() : null)
       const next = toggleLin(effectiveSelection(S.current.selRows, cur0, nRows, S.current.selCleared), lin)
       if (!next.has(lin)) {
         if (!next.size) { setCur(null); return } // nothing selected any more (effect resets the rest)
@@ -445,7 +491,7 @@ export default function TableView({
   }
 
   /** Shift+ArrowUp/Down: extend the selected range from the anchor; the focused cell follows the moving end. */
-  const extendBy = (dr: number): void => {
+  const extendBy = (dr: number, dc = 0): void => {
     const { res: rs, cur: cu, cols: cs, pending: pd } = S.current
     if (!rs || !cs.length) return
     const nRows = rs.rows.length
@@ -457,7 +503,9 @@ export default function TableView({
     anchorRef.current = anchor
     keepSelRef.current = true
     setSelRows(rangeSet(anchor, lin))
-    setCur(curAt(lin, cu?.c ?? 0))
+    const c = Math.max(0, Math.min(cs.length - 1, (cu?.c ?? 0) + dc))
+    setColSel({ a: anchorColRef.current, b: c }) // cell rectangle, not whole rows
+    setCur(curAt(lin, c))
   }
 
   const selectAllRows = (): void => {
@@ -468,6 +516,7 @@ export default function TableView({
     anchorRef.current = 0
     keepSelRef.current = true
     setSelRows(rangeSet(0, total - 1))
+    setColSel(fullCols()) // select-all = every cell (so ⌘C copies all columns, like DataGrip)
     setCur(cu ? { ...cu } : curAt(0, 0)) // always a new object so the cur-effect consumes keepSelRef
   }
 
@@ -564,8 +613,12 @@ export default function TableView({
 
     if (mod && !e.altKey) {
       if (e.key.toLowerCase() === 'c' && s.cur && !window.getSelection()?.toString()) {
-        const v = valueAt(s.cur)
-        copy(v == null ? '' : String(v))
+        const nRows = s.res.rows.length
+        const lins = [...effectiveSelection(s.selRows, s.cur, nRows, s.selCleared)]
+        copy(copyPayload(
+          s.cols.map((c) => c.name), lins.length ? lins : [linOf(s.cur, nRows)], s.colSel, s.cur.c,
+          (lin, c) => valueAt(curAt(lin, c))
+        ))
         handled()
       } else if (e.key.toLowerCase() === 'a' && !e.shiftKey) { handled(); selectAllRows() }
       else if (e.key === 'Backspace' && !s.isView) { handled(); deleteRow() }
@@ -590,10 +643,11 @@ export default function TableView({
         if (effectiveSelection(s.selRows, s.cur, s.res.rows.length, s.selCleared).size === 0) return
         handled()
         setSelRows(NO_ROWS)
+        setColSel(null)
         setSelCleared(true)
         return
-      case 'ArrowLeft': handled(); moveBy(0, -1); return
-      case 'ArrowRight': handled(); moveBy(0, 1); return
+      case 'ArrowLeft': handled(); if (e.shiftKey) extendBy(0, -1); else moveBy(0, -1); return
+      case 'ArrowRight': handled(); if (e.shiftKey) extendBy(0, 1); else moveBy(0, 1); return
       case 'Home': handled(); moveBy(0, 0, { c: 0 }); return
       case 'End': handled(); moveBy(0, 0, { c: Infinity }); return
       case 'PageUp': handled(); moveBy(-page, 0); return
@@ -649,8 +703,10 @@ export default function TableView({
     return (
       <td
         key={c.name}
-        className={(changed ? 'changed ' : '') + (v === null || v === undefined ? 'null ' : '') + (isCur ? 'cur' : '')}
-        onMouseDown={(e) => { if (!isEd && e.button === 0) pickRow(kind, i, ci, e) }}
+        className={(changed ? 'changed ' : '') + (v === null || v === undefined ? 'null ' : '') + (isCur ? 'cur ' : '') +
+          (colSel && !inColRange(colSel, ci) ? 'outcol' : '')}
+        onMouseDown={(e) => { if (!isEd && e.button === 0) { pickRow(kind, i, ci, e); dragRef.current = !e.metaKey && !e.ctrlKey } }}
+        onMouseEnter={(e) => { if (dragRef.current && e.buttons === 1 && !isEd) extendRect(kind, i, ci) }}
         onDoubleClick={() => startEdit(kind, i, c.name, null)}
         onContextMenu={(e) => { e.preventDefault(); copy(v == null ? '' : String(v)) }}
         title={v == null ? 'NULL' : String(v)}
@@ -826,8 +882,18 @@ export default function TableView({
               <thead>
                 <tr>
                   <th className="rn">#</th>
-                  {cols.map((c) => (
-                    <th key={c.name} onClick={() => sortBy(c.name)}>
+                  {cols.map((c, ci) => (
+                    <th
+                      key={c.name}
+                      className={colSel && inColRange(colSel, ci) && selSet.size > 1 ? 'colsel' : ''}
+                      title="Click to sort · ⌘/Ctrl+click to select the column · Shift+click to extend"
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey) pickColumn(ci, false)
+                        else if (e.shiftKey) pickColumn(ci, true)
+                        else sortBy(c.name)
+                        focusGrid()
+                      }}
+                    >
                       <span className="cname">{c.isPk ? '🔑 ' : ''}{c.name}</span>
                       <span className="ctype">{c.type}</span>
                       {!orderExpr.trim() && sort?.column === c.name && <span className="sortmark">{sort.desc ? ' ▼' : ' ▲'}</span>}
@@ -841,7 +907,7 @@ export default function TableView({
                     key={i}
                     className={(selSet.has(i) ? 'sel ' : '') + (pending.deleted.has(i) ? 'del' : '')}
                   >
-                    <td className="rn" onMouseDown={(e) => { if (e.button === 0) pickRow('row', i, cur?.c ?? 0, e) }}>{offset + i + 1}</td>
+                    <td className="rn" onMouseDown={(e) => { if (e.button === 0) pickRow('row', i, cur?.c ?? 0, e, true) }}>{offset + i + 1}</td>
                     {cols.map((c, ci) =>
                       renderCell('row', i, c, ci, pkCols.length === 0 && pending.edits.has(i) ? r[c.name] : cellVal(i, c.name))
                     )}
@@ -849,7 +915,7 @@ export default function TableView({
                 ))}
                 {pending.inserted.map((r, i) => (
                   <tr key={'n' + i} className={'new ' + (selSet.has(nRowsR + i) ? 'sel ' : '') + (flashRow === i ? 'flash' : '')}>
-                    <td className="rn" onMouseDown={(e) => { if (e.button === 0) pickRow('new', i, cur?.c ?? 0, e) }}>＋</td>
+                    <td className="rn" onMouseDown={(e) => { if (e.button === 0) pickRow('new', i, cur?.c ?? 0, e, true) }}>＋</td>
                     {cols.map((c, ci) => renderCell('new', i, c, ci, r[c.name]))}
                   </tr>
                 ))}

@@ -1365,3 +1365,193 @@ describe('userEvent smoke (real keyboard events)', () => {
     expect(cell(0, 1).textContent).toBe('Qrst')
   })
 })
+
+describe('TableView: rectangle selection', () => {
+  it('drag selects a rectangle and Cmd+C copies an array of objects', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    fireEvent.mouseEnter(cell(1, 1), { buttons: 1 })
+    fireEvent.mouseEnter(cell(2, 2), { buttons: 1 })
+    fireEvent.mouseUp(window)
+    key('c', { metaKey: true })
+    expect(JSON.parse(clipboard.at(-1)!)).toEqual([
+      { name: 'n1', note: 'x1' }, { name: 'n2', note: null }, { name: 'n3', note: 'x3' }
+    ])
+  })
+})
+
+describe('TableView: keyboard rectangle selection', () => {
+  it('Shift+Down / Shift+Right extend a cell rectangle and only those cells are copied', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    key('ArrowDown', { shiftKey: true })
+    key('ArrowRight', { shiftKey: true })
+    expect(cell(0, 0).classList.contains('outcol')).toBe(true)
+    expect(cell(1, 2).classList.contains('outcol')).toBe(false)
+    key('c', { metaKey: true })
+    expect(JSON.parse(clipboard.at(-1)!)).toEqual([{ name: 'n1', note: 'x1' }, { name: 'n2', note: null }])
+  })
+})
+
+describe('TableView: keyboard rectangle selection (sequences)', () => {
+  it('keeps the first row selected through Down, Right, Left, Down', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    const sel = (): string[] => bodyRows().map((r) => (r.classList.contains('sel') ? 'S' : '-'))
+    key('ArrowDown', { shiftKey: true }); expect(sel().join('')).toBe('SS---')
+    key('ArrowRight', { shiftKey: true }); expect(sel().join('')).toBe('SS---')
+    key('ArrowLeft', { shiftKey: true }); expect(sel().join('')).toBe('SS---')
+    key('ArrowLeft', { shiftKey: true }); expect(sel().join('')).toBe('SS---')
+    key('ArrowDown', { shiftKey: true }); expect(sel().join('')).toBe('SSS--')
+  })
+})
+
+describe('TableView: cell-range copy', () => {
+  const header = (c: number): HTMLElement => document.querySelectorAll('thead th')[c + 1] as HTMLElement
+  const copied = (): unknown => JSON.parse(clipboard.at(-1)!)
+
+  it('a single cell still copies its plain value', async () => {
+    await renderTV()
+    click(cell(1, 1))
+    key('c', { metaKey: true })
+    expect(clipboard.at(-1)).toBe('n2')
+  })
+
+  it('Shift+click selects the rectangle between the anchor cell and the clicked cell', async () => {
+    await renderTV()
+    click(cell(1, 0))
+    click(cell(3, 1), { shiftKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ id: '2', name: 'n2' }, { id: '3', name: 'n3' }, { id: '4', name: 'n4' }])
+  })
+
+  it('Shift+click works upwards and leftwards from the anchor', async () => {
+    await renderTV()
+    click(cell(2, 2))
+    click(cell(1, 1), { shiftKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ name: 'n2', note: null }, { name: 'n3', note: 'x3' }])
+  })
+
+  it('Cmd+click on a column header selects the whole column', async () => {
+    await renderTV()
+    fireEvent.click(header(1), { metaKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([1, 2, 3, 4, 5].map((i) => ({ name: 'n' + i })))
+    expect(lastQuery().orderBy).toBeUndefined() // did not sort
+  })
+
+  it('Shift+click on another header extends the column range', async () => {
+    await renderTV()
+    fireEvent.click(header(0), { metaKey: true })
+    fireEvent.click(header(1), { shiftKey: true })
+    key('c', { metaKey: true })
+    expect((copied() as unknown[]).length).toBe(5)
+    expect((copied() as Record<string, unknown>[])[0]).toEqual({ id: '1', name: 'n1' })
+  })
+
+  it('clicking a row-number gutter selects the full row and copies every column', async () => {
+    await renderTV()
+    fireEvent.mouseDown(bodyRows()[1].querySelector('td.rn')!, { button: 0 })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ id: '2', name: 'n2', note: null }])
+  })
+
+  it('a plain click after a rectangle selection collapses back to one cell', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    click(cell(2, 2), { shiftKey: true })
+    click(cell(1, 1))
+    key('c', { metaKey: true })
+    expect(clipboard.at(-1)).toBe('n2')
+  })
+
+  it('dragging does nothing once the mouse button is released', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    fireEvent.mouseUp(window)
+    fireEvent.mouseEnter(cell(2, 2), { buttons: 1 })
+    key('c', { metaKey: true })
+    expect(clipboard.at(-1)).toBe('1')
+  })
+
+  it('Cmd+click toggling rows does not leave a stale column range', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    click(cell(1, 2), { metaKey: true })
+    key('c', { metaKey: true })
+    expect((copied() as unknown[]).length).toBe(2)
+  })
+})
+
+describe('TableView: copy integration with edits, new rows and Escape', () => {
+  const copied = (): unknown => JSON.parse(clipboard.at(-1)!)
+
+  it('copies pending (unsaved) edits, not the loaded values', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    key('Enter')
+    const ed = editor()!
+    fireEvent.change(ed, { target: { value: 'EDITED' } })
+    fireEvent.keyDown(ed, { key: 'Enter' }) // commit, cursor moves down to row 1
+    click(cell(0, 1))
+    click(cell(1, 1), { shiftKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ name: 'EDITED' }, { name: 'n2' }])
+  })
+
+  it('includes pending-insert rows in a range that reaches them', async () => {
+    await renderTV()
+    fireEvent.click(btn(/Add row/))
+    fireEvent.keyDown(editor()!, { key: 'Escape' })
+    click(cell(4, 0))
+    click(bodyRows()[5].querySelectorAll('td')[1], { shiftKey: true })
+    key('c', { metaKey: true })
+    expect((copied() as unknown[]).length).toBe(2)
+    expect((copied() as Record<string, unknown>[])[0]).toEqual({ id: '5' })
+  })
+
+  it('after Escape clears the row selection, copy falls back to the focused cell', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    click(cell(2, 2), { shiftKey: true })
+    key('Escape')
+    key('c', { metaKey: true })
+    expect(clipboard.at(-1)).toBe('x3')
+  })
+
+  it('Cmd+C is ignored while a text selection exists (native copy wins)', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    const spy = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'abc' } as Selection)
+    const before = clipboard.length
+    key('c', { metaKey: true })
+    spy.mockRestore()
+    expect(clipboard.length).toBe(before)
+  })
+
+  it('works on read-only views too', async () => {
+    await renderTV(fresh('view'))
+    click(cell(0, 0))
+    click(cell(1, 1), { shiftKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ id: '1', name: 'n1' }, { id: '2', name: 'n2' }])
+  })
+
+  it('Shift+Up from the middle selects upwards and copies in row order', async () => {
+    await renderTV()
+    click(cell(2, 1))
+    key('ArrowUp', { shiftKey: true })
+    key('ArrowUp', { shiftKey: true })
+    key('c', { metaKey: true })
+    expect(copied()).toEqual([{ name: 'n1' }, { name: 'n2' }, { name: 'n3' }])
+  })
+
+  it('Ctrl+C behaves like Cmd+C', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    click(cell(1, 0), { shiftKey: true })
+    key('c', { ctrlKey: true })
+    expect(copied()).toEqual([{ id: '1' }, { id: '2' }])
+  })
+})

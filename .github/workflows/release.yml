@@ -39,7 +39,7 @@ jobs:
     # Both architectures are built on an Apple Silicon runner. The app has no
     # native (compiled) dependencies (pg, ioredis, @aws-sdk/* are pure JS), so
     # the x64 app is simply cross-packaged with the x64 Electron binary.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     permissions:
       contents: read

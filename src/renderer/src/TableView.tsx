@@ -9,7 +9,9 @@ import { useRatioSplit } from './Resizable'
 import { MAX_LIMIT, parseRange } from './lib/range'
 import { useLinger } from './useLinger'
 import { computeDelete, effectiveSelection, linOf, NO_ROWS, rangeSet, toggleLin } from './lib/rowSelection'
-import { copyPayload, inColRange } from './lib/cellRange'
+import { colBounds, copyPayload, inColRange } from './lib/cellRange'
+import { planPaste } from './lib/cellPaste'
+import { findMatches, firstFrom, stepIndex } from './lib/gridFind'
 import { cleanDbError, suggestHint } from './lib/whereFix'
 import { explorerOwnsRefresh } from './lib/focusZone'
 import { getSettings, useSettings } from './lib/settings'
@@ -25,6 +27,7 @@ interface Cur { kind: Kind; i: number; c: number }
 const emptyPending = (): Pending => ({ edits: new Map(), deleted: new Set(), inserted: [] })
 const isDirty = (p: Pending): boolean => p.edits.size + p.deleted.size + p.inserted.length > 0
 const NULL_TOKEN = '<null>'
+const TEXT_LIKE = /^(text|character|char|varchar|bpchar|citext|name)\b/i
 const clean = (e: unknown): string => cleanDbError(e)
 /** Render `backticked` parts of a hint message as <code>. */
 const hintParts = (msg: string): React.ReactNode[] =>
@@ -51,7 +54,15 @@ function applyEdit(pending: Pending, res: RowsResult, kind: Kind, i: number, col
       if (Object.keys(e).length) p.edits.set(i, e)
       else p.edits.delete(i)
     } else p.edits.set(i, { ...(p.edits.get(i) ?? {}), [col]: v })
-  } else p.inserted[i] = { ...p.inserted[i], [col]: v }
+  } else {
+    const row = { ...p.inserted[i] }
+    // an empty cell of a new row means "not set": leave the column out so the INSERT uses its DEFAULT (uuid / serial / now() ...).
+    // Text-like columns keep an explicit '' only when it was typed over an existing value.
+    const type = res.columns.find((c) => c.name === col)?.type ?? ''
+    if (v === '' && (!(col in row) || !TEXT_LIKE.test(type))) delete row[col]
+    else row[col] = v
+    p.inserted[i] = row
+  }
   return p
 }
 
@@ -129,6 +140,7 @@ export default function TableView({
   const [indexes, setIndexes] = useState<{ name: string; definition: string }[]>([])
 
   const gridRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const typedRef = useRef<string | null>(null) // first character typed to start an edit (replaces content)
   const doneRef = useRef(true) // true once the current edit was committed/cancelled (guards onBlur re-entry)
@@ -251,6 +263,21 @@ export default function TableView({
     return () => window.removeEventListener('keydown', h)
   })
 
+  // Cmd/Ctrl+F: open the find bar of the active table tab (not while a dialog is open)
+  useEffect(() => {
+    if (!active) return
+    const h = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return
+      if (S.current.tab !== 'data' || document.querySelector('.modal-bg, .cd-bg')) return
+      const t = e.target as HTMLElement
+      if (t !== document.body && !t.closest?.('.tableview')) return
+      e.preventDefault()
+      openFind()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
+
   // Cmd/Ctrl+N when nothing is focused (focus on <body>, e.g. after a dialog closed): the active table tab still adds a row.
   // With focus inside the view the React handler below deals with it; elsewhere (explorer, console, dialogs) it is ignored.
   useEffect(() => {
@@ -332,6 +359,46 @@ export default function TableView({
       : res!.rows[i][c]
 
   const focusGrid = (): void => gridRef.current?.focus({ preventScroll: true })
+
+  // ---- local find (Cmd/Ctrl+F): searches the loaded rows only, highlights every hit, Enter / Shift+Enter step through ----
+  const [find, setFind] = useState<{ open: boolean; q: string; cs: boolean; idx: number }>({ open: false, q: '', cs: false, idx: 0 })
+  const findRef = useRef<HTMLInputElement>(null)
+  const matches = useMemo(() => {
+    if (!find.open || !find.q || !res) return []
+    const nR = res.rows.length
+    const txt = (lin: number, c: number): string | null => {
+      const name = cols[c]?.name
+      if (!name) return null
+      const v = lin < nR
+        ? (pending.edits.get(lin) && name in pending.edits.get(lin)! ? pending.edits.get(lin)![name] : res.rows[lin]?.[name])
+        : pending.inserted[lin - nR]?.[name]
+      return v == null ? null : String(v)
+    }
+    return findMatches(nR + pending.inserted.length, cols.length, txt, find.q, find.cs)
+  }, [find.open, find.q, find.cs, res, pending, cols])
+  const matchSet = useMemo(() => new Set(matches.map(([r, c]) => r * Math.max(1, cols.length) + c)), [matches, cols.length])
+  const goMatch = (i: number, list = matches): void => {
+    const m = list[i]
+    setFind((f) => ({ ...f, idx: i }))
+    if (m) setCur(curAt(m[0], m[1]))
+  }
+  const openFind = (): void => {
+    setFind((f) => ({ ...f, open: true }))
+    setTimeout(() => { findRef.current?.focus(); findRef.current?.select() }, 0)
+  }
+  const closeFind = (): void => { setFind((f) => ({ ...f, open: false })); focusGrid() }
+  const onFindQuery = (q: string, cs = find.cs): void => {
+    setFind((f) => ({ ...f, q, cs, idx: 0 }))
+    if (!q || !res) return
+    const nR = res.rows.length
+    const txt = (lin: number, c: number): string | null => {
+      const name = cols[c]?.name
+      const v = name ? (lin < nR ? cellVal(lin, name) : pending.inserted[lin - nR]?.[name]) : null
+      return v == null ? null : String(v)
+    }
+    const list = findMatches(nR + pending.inserted.length, cols.length, txt, q, cs)
+    if (list.length) goMatch(firstFrom(list, S.current.cur ? linOf(S.current.cur, nR) : 0, S.current.cur?.c ?? 0), list)
+  }
 
   // ---- cell navigation -------------------------------------------------------------------------
   const moveBy = (dr: number, dc: number, abs?: { r?: number; c?: number }): void => {
@@ -584,6 +651,80 @@ export default function TableView({
   }
 
   // ---- keyboard --------------------------------------------------------------------------------
+  /** True when the user has text selected inside an input (cell editor, find box, filters): native copy applies there. */
+  const selectionInInput = (): boolean => {
+    const a = document.activeElement
+    return !!a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && (a as HTMLInputElement).selectionStart !== (a as HTMLInputElement).selectionEnd
+  }
+  /** The text ⌘/Ctrl+C puts on the clipboard for the current selection (null = nothing to copy). */
+  const selectionText = (): string | null => {
+    const s = S.current
+    if (!s.res || !s.cur) return null
+    const nRows = s.res.rows.length
+    const lins = [...effectiveSelection(s.selRows, s.cur, nRows, s.selCleared)]
+    return copyPayload(
+      s.cols.map((c) => c.name), lins.length ? lins : [linOf(s.cur, nRows)], s.colSel, s.cur.c,
+      (lin, c) => valueAt(curAt(lin, c))
+    )
+  }
+  /**
+   * Native "copy" event (macOS Edit ▸ Copy, which is what ⌘C hits before the page sees a keydown). With no text selected
+   * Chromium aims it at <body>, not the focused grid, so it is listened for on the window and scoped to this view.
+   */
+  useEffect(() => {
+    if (!active) return
+    const h = (e: ClipboardEvent): void => {
+      const s = S.current
+      if (s.tab !== 'data' || s.editing || document.querySelector('.modal-bg, .cd-bg')) return
+      const a = document.activeElement as HTMLElement | null
+      if (a && a !== document.body && !viewRef.current?.contains(a)) return // focus is in another part of the app
+      if (a?.closest('input, textarea, select')) return // native text copy
+      if (window.getSelection()?.toString() && !a?.closest('.gridwrap')) return // real text selected outside the grid
+      const txt = selectionText()
+      if (txt === null || !e.clipboardData) return
+      e.preventDefault()
+      e.clipboardData.setData('text/plain', txt)
+    }
+    window.addEventListener('copy', h)
+    return () => window.removeEventListener('copy', h)
+  })
+
+  /**
+   * Native "paste" event (macOS Edit ▸ Paste). Like copy, it is aimed at <body> when no input is focused, so it is listened for
+   * on the window and scoped to this view. Writes into the selected cell(s) as pending edits; a cell editor keeps native paste.
+   */
+  useEffect(() => {
+    if (!active) return
+    const h = (e: ClipboardEvent): void => {
+      const s = S.current
+      if (s.tab !== 'data' || s.editing || s.isView || s.loading || s.submitting || !s.res || !s.cur) return
+      if (document.querySelector('.modal-bg, .cd-bg')) return
+      const a = document.activeElement as HTMLElement | null
+      if (a && a !== document.body && !viewRef.current?.contains(a)) return
+      if (a?.closest('input, textarea, select')) return // native paste into the filter boxes / editors
+      const text = e.clipboardData?.getData('text/plain')
+      if (text === undefined || text === '') return
+      const nRows = s.res.rows.length
+      const lins = [...effectiveSelection(s.selRows, s.cur, nRows, s.selCleared)].sort((x, y) => x - y)
+      const [c0, c1] = colBounds(s.colSel, s.cur.c)
+      const plan = planPaste(
+        text, s.cols.map((c) => c.name), nRows + s.pending.inserted.length,
+        { lin: lins.length ? lins[0] : linOf(s.cur, nRows), col: c0 }, lins.length ? lins : [linOf(s.cur, nRows)], [c0, c1]
+      )
+      if (!plan.length) return
+      e.preventDefault()
+      let p = s.pending
+      for (const { lin, col, value } of plan) {
+        const cu = curAt(lin, col)
+        p = applyEdit(p, s.res, cu.kind, cu.i, s.cols[col].name, value === null ? NULL_TOKEN : value)
+      }
+      S.current = { ...S.current, pending: p }
+      setPending(p)
+    }
+    window.addEventListener('paste', h)
+    return () => window.removeEventListener('paste', h)
+  })
+
   const onViewKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
     const s = S.current
     if (!s.active || s.tab !== 'data') return
@@ -612,13 +753,8 @@ export default function TableView({
     const page = Math.max(1, Math.floor((gridRef.current?.clientHeight ?? 400) / 22) - 1)
 
     if (mod && !e.altKey) {
-      if (e.key.toLowerCase() === 'c' && s.cur && !window.getSelection()?.toString()) {
-        const nRows = s.res.rows.length
-        const lins = [...effectiveSelection(s.selRows, s.cur, nRows, s.selCleared)]
-        copy(copyPayload(
-          s.cols.map((c) => c.name), lins.length ? lins : [linOf(s.cur, nRows)], s.colSel, s.cur.c,
-          (lin, c) => valueAt(curAt(lin, c))
-        ))
+      if (e.key.toLowerCase() === 'c' && s.cur && !selectionInInput()) {
+        copy(selectionText()!)
         handled()
       } else if (e.key.toLowerCase() === 'a' && !e.shiftKey) { handled(); selectAllRows() }
       else if (e.key === 'Backspace' && !s.isView) { handled(); deleteRow() }
@@ -704,8 +840,10 @@ export default function TableView({
       <td
         key={c.name}
         className={(changed ? 'changed ' : '') + (v === null || v === undefined ? 'null ' : '') + (isCur ? 'cur ' : '') +
-          (colSel && !inColRange(colSel, ci) ? 'outcol' : '')}
-        onMouseDown={(e) => { if (!isEd && e.button === 0) { pickRow(kind, i, ci, e); dragRef.current = !e.metaKey && !e.ctrlKey } }}
+          (colSel && !inColRange(colSel, ci) ? 'outcol ' : '') +
+          (find.open && matchSet.has(linOf({ kind, i }, nRowsR) * Math.max(1, cols.length) + ci)
+            ? (matches[find.idx] && matches[find.idx][0] === linOf({ kind, i }, nRowsR) && matches[find.idx][1] === ci ? 'fm fmcur' : 'fm') : '')}
+        onMouseDown={(e) => { if (!isEd && e.button === 0) { pickRow(kind, i, ci, e); dragRef.current = !e.metaKey && !e.ctrlKey; focusGrid() } }}
         onMouseEnter={(e) => { if (dragRef.current && e.buttons === 1 && !isEd) extendRect(kind, i, ci) }}
         onDoubleClick={() => startEdit(kind, i, c.name, null)}
         onContextMenu={(e) => { e.preventDefault(); copy(v == null ? '' : String(v)) }}
@@ -734,6 +872,7 @@ export default function TableView({
 
   return (
     <div
+      ref={viewRef}
       className={'tableview' + (paneFade ? ' pane-fade' : '')}
       tabIndex={-1}
       onKeyDown={onViewKeyDown}
@@ -870,6 +1009,28 @@ export default function TableView({
             </div>
           )}
           {!isView && res && pkCols.length === 0 && <div className="msg warn">No primary key: editing existing rows is disabled.</div>}
+          {find.open && (
+            <div className="findbar" onKeyDown={(e) => e.stopPropagation()}>
+              <input
+                ref={findRef}
+                className="find-input"
+                placeholder="Find in loaded rows"
+                value={find.q}
+                spellCheck={false}
+                onChange={(e) => onFindQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Escape') { e.preventDefault(); closeFind() }
+                  else if (e.key === 'Enter') { e.preventDefault(); if (matches.length) goMatch(stepIndex(find.idx, e.shiftKey ? -1 : 1, matches.length)) }
+                }}
+              />
+              <span className="find-count">{!find.q ? '' : matches.length ? `${find.idx + 1} / ${matches.length}` : 'No results'}</span>
+              <button className={find.cs ? 'on' : ''} title="Match case" onClick={() => onFindQuery(find.q, !find.cs)}>Aa</button>
+              <button title="Previous (Shift+Enter)" disabled={!matches.length} onClick={() => goMatch(stepIndex(find.idx, -1, matches.length))}>▲</button>
+              <button title="Next (Enter)" disabled={!matches.length} onClick={() => goMatch(stepIndex(find.idx, 1, matches.length))}>▼</button>
+              <button title="Close (Esc)" onClick={closeFind}>✕</button>
+            </div>
+          )}
           <div className={'gridbox' + (busy ? ' busy' : '')}>
           {showOverlay && (
             <div className={'loading-overlay' + (busy ? '' : ' leaving')}>

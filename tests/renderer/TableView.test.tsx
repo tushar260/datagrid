@@ -1520,13 +1520,24 @@ describe('TableView: copy integration with edits, new rows and Escape', () => {
     expect(clipboard.at(-1)).toBe('x3')
   })
 
-  it('Cmd+C is ignored while a text selection exists (native copy wins)', async () => {
+  it('a stale text selection elsewhere on the page does not block copying the selected cell', async () => {
     await renderTV()
     click(cell(0, 0))
     const spy = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'abc' } as Selection)
-    const before = clipboard.length
     key('c', { metaKey: true })
     spy.mockRestore()
+    expect(clipboard.at(-1)).toBe('1')
+  })
+
+  it('Cmd+C inside a text input with selected text is left to the browser', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    const w = whereBox()
+    w.value = 'abcdef'
+    w.focus()
+    w.setSelectionRange(0, 3)
+    const before = clipboard.length
+    key('c', { metaKey: true })
     expect(clipboard.length).toBe(before)
   })
 
@@ -1553,5 +1564,240 @@ describe('TableView: copy integration with edits, new rows and Escape', () => {
     click(cell(1, 0), { shiftKey: true })
     key('c', { ctrlKey: true })
     expect(copied()).toEqual([{ id: '1' }, { id: '2' }])
+  })
+})
+
+describe('TableView: local find (Cmd/Ctrl+F)', () => {
+  const bar = (): HTMLElement | null => document.querySelector('.findbar')
+  const box = (): HTMLInputElement => document.querySelector('.find-input') as HTMLInputElement
+  const hits = (): string[] => Array.from(document.querySelectorAll('td.fm')).map((t) => t.textContent!)
+  const open = (): void => void fireEvent.keyDown(grid(), { key: 'f', metaKey: true })
+
+  it('Cmd+F opens the find bar and focuses its input; Ctrl+F too', async () => {
+    await renderTV()
+    expect(bar()).toBeNull()
+    click(cell(0, 0))
+    fireEvent.keyDown(grid(), { key: 'f', ctrlKey: true })
+    await waitFor(() => expect(document.activeElement).toBe(box()))
+  })
+
+  it('highlights every matching cell, shows the count and jumps to the first hit', async () => {
+    await renderTV()
+    open()
+    change(box(), 'n3')
+    expect(hits()).toEqual(['n3'])
+    expect(document.querySelector('.find-count')!.textContent).toBe('1 / 1')
+    expect(curCell()).toBe(cell(2, 1))
+    change(box(), 'n')
+    expect(hits().length).toBe(5)
+    expect(document.querySelector('.find-count')!.textContent).toBe('3 / 5') // lands on the first hit at/after the cursor (row 3)
+  })
+
+  it('Enter / Shift+Enter step through the hits with wrap-around', async () => {
+    await renderTV()
+    open()
+    change(box(), 'n')
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    expect(curCell()).toBe(cell(1, 1))
+    fireEvent.keyDown(box(), { key: 'Enter', shiftKey: true })
+    fireEvent.keyDown(box(), { key: 'Enter', shiftKey: true })
+    expect(curCell()).toBe(cell(4, 1)) // wrapped backwards to the last hit
+    expect(document.querySelector('.fmcur')).toBe(cell(4, 1))
+  })
+
+  it('case-insensitive by default, "Aa" makes it case-sensitive', async () => {
+    await renderTV()
+    open()
+    change(box(), 'N1')
+    expect(hits()).toEqual(['n1'])
+    fireEvent.click(btn('Match case'))
+    expect(hits()).toEqual([])
+    expect(document.querySelector('.find-count')!.textContent).toBe('No results')
+  })
+
+  it('searches unsaved edits and does not match NULL cells', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    key('Enter')
+    fireEvent.change(editor()!, { target: { value: 'ZZZ' } })
+    fireEvent.keyDown(editor()!, { key: 'Enter' })
+    open()
+    change(box(), 'zzz')
+    expect(hits()).toEqual(['ZZZ'])
+    change(box(), 'null')
+    expect(hits()).toEqual([])
+  })
+
+  it('Escape closes the bar, clears the highlights and returns focus to the grid', async () => {
+    await renderTV()
+    open()
+    change(box(), 'n')
+    fireEvent.keyDown(box(), { key: 'Escape' })
+    expect(bar()).toBeNull()
+    expect(document.querySelectorAll('td.fm').length).toBe(0)
+    expect(document.activeElement).toBe(grid())
+  })
+
+  it('typing in the find box does not edit cells or trigger grid shortcuts', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    open()
+    fireEvent.keyDown(box(), { key: 'a' })
+    fireEvent.keyDown(box(), { key: 'Backspace' })
+    expect(editor()).toBeNull()
+    expect(bodyRows().length).toBe(5)
+  })
+
+  it('does not open while the Structure tab is shown', async () => {
+    await renderTV()
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }))
+    open()
+    expect(bar()).toBeNull()
+  })
+})
+
+describe('TableView: cell copy via the native copy event, and new-row defaults', () => {
+  const doCopy = (target?: Element): { text: string | null; prevented: boolean } => {
+    let text: string | null = null
+    const ev = new Event('copy', { bubbles: true, cancelable: true }) as Event & { clipboardData: { setData: (t: string, v: string) => void } }
+    ev.clipboardData = { setData: (_t: string, v: string) => { text = v } }
+    ;(target ?? grid()).dispatchEvent(ev)
+    return { text, prevented: ev.defaultPrevented }
+  }
+
+  it('a plain cell click then a native "copy" event copies that whole cell (no double-click needed)', async () => {
+    await renderTV()
+    click(cell(1, 1))
+    const r = doCopy()
+    expect(r.prevented).toBe(true)
+    expect(r.text).toBe('n2')
+  })
+
+  it('the menu copy event is aimed at <body> when no text is selected: it still copies the selected cell', async () => {
+    await renderTV()
+    click(cell(2, 2))
+    const r = doCopy(document.body)
+    expect(r.prevented).toBe(true)
+    expect(r.text).toBe('x3')
+  })
+
+  it('a native copy aimed at another input (e.g. the WHERE box) is left to the browser', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    whereBox().focus()
+    expect(doCopy(whereBox()).prevented).toBe(false)
+  })
+
+  it('a native copy of a multi-cell selection is the JSON array', async () => {
+    await renderTV()
+    click(cell(0, 0))
+    click(cell(1, 1), { shiftKey: true })
+    expect(JSON.parse(doCopy().text!)).toEqual([{ id: '1', name: 'n1' }, { id: '2', name: 'n2' }])
+  })
+
+  it('clicking a cell moves focus to the grid so Cmd+C reaches the view', async () => {
+    await renderTV()
+    whereBox().focus()
+    click(cell(0, 0))
+    expect(document.activeElement).toBe(grid())
+  })
+
+  it('native copy is left alone while a cell editor is open', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    key('Enter')
+    const ev = new Event('copy', { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown }
+    ev.clipboardData = { setData: vi.fn() }
+    editor()!.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(false)
+  })
+
+  it('an untouched / emptied cell of a new row is left out of the INSERT (so the DB default applies)', async () => {
+    await renderTV()
+    fireEvent.click(btn(/Add row/))
+    fireEvent.keyDown(editor()!, { key: 'Tab' }) // commit the (empty) first cell
+    fireEvent.click(submitBtn())
+    await waitFor(() => expect(api.apply).toHaveBeenCalled())
+    expect(api.apply.mock.calls.at(-1)![4].inserts).toEqual([{}])
+  })
+
+  it('a typed value on a new row is still inserted, other columns stay unset', async () => {
+    await renderTV()
+    fireEvent.click(btn(/Add row/))
+    fireEvent.keyDown(editor()!, { key: 'Tab' }) // id left empty → default; cursor moves to "name"
+    key('Enter')
+    fireEvent.change(editor()!, { target: { value: 'bob' } })
+    fireEvent.keyDown(editor()!, { key: 'Enter' })
+    fireEvent.click(submitBtn())
+    await waitFor(() => expect(api.apply).toHaveBeenCalled())
+    expect(api.apply.mock.calls.at(-1)![4].inserts).toEqual([{ name: 'bob' }])
+  })
+})
+
+describe('TableView: paste into selected cells', () => {
+  const doPaste = (text: string, target: Element = document.body): boolean => {
+    const ev = new Event('paste', { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown }
+    ev.clipboardData = { getData: () => text }
+    act(() => { target.dispatchEvent(ev) })
+    return ev.defaultPrevented
+  }
+
+  it('pastes into a selected cell without opening the editor', async () => {
+    await renderTV()
+    click(cell(1, 1))
+    expect(doPaste('PASTED')).toBe(true)
+    expect(editor()).toBeNull()
+    expect(cell(1, 1).textContent).toBe('PASTED')
+    expect(cell(1, 1).classList.contains('changed')).toBe(true)
+    expect(submitBtn().disabled).toBe(false)
+  })
+
+  it('a single value fills every selected cell', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    click(cell(1, 2), { shiftKey: true })
+    doPaste('Z')
+    expect([texts(0)[2], texts(0)[3], texts(1)[2], texts(1)[3]]).toEqual(['Z', 'Z', 'Z', 'Z']) // name + note of rows 1-2 (index 0 = gutter)
+    expect(texts(2)[2]).toBe('n3')
+  })
+
+  it('a TSV block is pasted starting at the selected cell', async () => {
+    await renderTV()
+    click(cell(1, 0))
+    doPaste('a\tb\nc\td')
+    expect([texts(1).slice(1, 3), texts(2).slice(1, 3)]).toEqual([['a', 'b'], ['c', 'd']])
+  })
+
+  it('round-trips what Cmd+C copied (JSON array of objects)', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    click(cell(1, 1), { shiftKey: true })
+    key('c', { metaKey: true })
+    click(cell(3, 1))
+    doPaste(clipboard.at(-1)!)
+    expect([texts(3)[2], texts(4)[2]]).toEqual(['n1', 'n2'])
+  })
+
+  it('is ignored while a cell editor or a filter box has focus (native paste applies)', async () => {
+    await renderTV()
+    click(cell(0, 1))
+    key('Enter')
+    expect(doPaste('X', editor()!)).toBe(false)
+    expect(texts(0)[2]).not.toBe('X')
+  })
+
+  it('does nothing on read-only views', async () => {
+    await renderTV(fresh('view'))
+    click(cell(0, 0))
+    expect(doPaste('X')).toBe(false)
+  })
+
+  it('pasted values are submitted as updates', async () => {
+    await renderTV()
+    click(cell(1, 1))
+    doPaste('NEW')
+    fireEvent.click(submitBtn())
+    await waitFor(() => expect(api.apply).toHaveBeenCalled())
+    expect(api.apply.mock.calls.at(-1)![4].updates).toEqual([{ pk: { id: '2' }, set: { name: 'NEW' } }])
   })
 })
